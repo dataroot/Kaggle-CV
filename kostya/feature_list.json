@@ -13,7 +13,8 @@
     "questions_date_added_doy_cos",
     "questions_date_added_dow",
     "questions_date_added_hour_sin",
-    "questions_date_added_hour_cos"
+    "questions_date_added_hour_cos",
+    "questions_body_length",
   ],
   "prof": [
     "professionals_industry",
@@ -30,6 +31,7 @@
     "professionals_last_answer_date_doy_cos",
     "professionals_last_answer_date_dow",
     "professionals_last_answer_date_hour_sin",
-    "professionals_last_answer_date_hour_cos"
+    "professionals_last_answer_date_hour_cos",
+    "professionals_email_activated",
   ]
 }
