@@ -52,12 +52,16 @@ class BatchGenerator(keras.utils.Sequence):
         x_que, x_pro = [], []
         for i, (que, pro) in enumerate(pairs):
             tmp = []
+            print(que, pro)
             for tag in self.que_tag.get(que, []):
                 tmp.append(self.tag_emb.get(tag, np.zeros(10)))
+                print('tag: ', tag)
             if len(tmp) == 0:
                 tmp.append(np.zeros(10))
             x_que.append(np.vstack(tmp).mean(axis = 0))
             x_pro.append(self.ind_emb.get(self.pro_ind[pro], np.zeros(10)))
+            print('ind: ', self.pro_ind[pro])
+            
         return np.vstack(x_que), np.vstack(x_pro)
     
     
