@@ -1,11 +1,14 @@
 import numpy as np
 import pandas as pd
+
+import pickle
 from sklearn.utils import shuffle
+from utils import TextProcessor
 
 import keras
 from keras.utils import Sequence
 
-from utils import TextProcessor
+from preprocessor import Preprocessor
 
 
 class BatchGenerator(Sequence):
