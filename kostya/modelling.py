@@ -37,7 +37,7 @@ class Merger(Model):
 class Mothership(Model):
     def __init__(self, que_dim: int, que_input_embs: list, pro_dim: int, pro_input_embs: list, inter_dim: int, \
                 que_output_embs: list, pro_output_embs: list):
-        super().__init__() # idk y
+        super().__init__()
         
         self.que_model = Encoder(que_dim, inter_dim, que_input_embs, que_output_embs)
         self.pro_model = Encoder(pro_dim, inter_dim, pro_input_embs, pro_output_embs)
@@ -46,8 +46,4 @@ class Mothership(Model):
             ([self.que_model.outputs[0], self.pro_model.outputs[0]])
         outputs = Lambda(lambda x: tf.reshape(tf.exp(-self.merged), (-1, 1)))(self.merged)
         super().__init__([self.que_model.inputs[0], self.pro_model.inputs[0]], outputs)
-        
-        # self.merge_model = Merger(inter_dim)
-        # super().__init__([self.que_model.inputs[0], self.pro_model.inputs[0]], 
-        #                   self.merge_model([self.pro_model.outputs[0], self.que_model.outputs[0]]))
 
