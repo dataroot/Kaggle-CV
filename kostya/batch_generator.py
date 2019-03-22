@@ -152,7 +152,7 @@ class BatchGenerator(Sequence):
         # Create target array
         y = np.concatenate([np.ones(self.batch_size), np.zeros(self.batch_size)])
         
-        return (x_que, x_pro), y
+        return [x_que_embeddings, x_pro_embeddings], y
     
     
     def on_epoch_end(self):
