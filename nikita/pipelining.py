@@ -21,8 +21,8 @@ class BatchGenerator(keras.utils.Sequence):
         
         self.tp = TextProcessor()
         pro['professionals_industry'] = pro['professionals_industry'].apply(self.tp.process)
-        pro['professionals_industry'] = pro['professionals_industry'].apply(lambda x: ' '.join(x))
-        
+        tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords = True))
+                                                            
         self.pro_ind = {row['professionals_id']: row['professionals_industry'] for i, row in pro.iterrows()}
         
         que_tags = que.merge(tag_que, left_on = 'questions_id', right_on = 'tag_questions_question_id').merge(tags, left_on = 'tag_questions_tag_id', right_on = 'tags_tag_id')
@@ -50,10 +50,12 @@ class BatchGenerator(keras.utils.Sequence):
     
     def __convert(self, pairs):
         x_que, x_pro = [], []
-        for que, pro in pairs:
+        for i, (que, pro) in enumerate(pairs):
             tmp = []
-            for tag in self.que_tag.get(que, ['#']):
+            for tag in self.que_tag.get(que, []):
                 tmp.append(self.tag_emb.get(tag, np.zeros(10)))
+            if len(tmp) == 0:
+                tmp.append(np.zeros(10))
             x_que.append(np.vstack(tmp).mean(axis = 0))
             x_pro.append(self.ind_emb.get(self.pro_ind[pro], np.zeros(10)))
         return np.vstack(x_que), np.vstack(x_pro)
