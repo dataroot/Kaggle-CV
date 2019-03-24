@@ -1,182 +1,91 @@
-import numpy as np
-import pandas as pd
-
 import pickle
-from sklearn.utils import shuffle
-from utils import TextProcessor
+import random
 
 import keras
-from keras.utils import Sequence
+import pandas as pd
+import numpy as np
 
-from preprocessor import Preprocessor
+from utils import TextProcessor
 
 
-class BatchGenerator(Sequence):
-    """
-    Generates batches of data to feed into the model
-    """
-    
-    def __init__(self, pp: Preprocessor, batch_size: int = 50, shuffle: bool = True):
-        """
-        Loads required datasets from pp, batch_size and shuffle parameters
-        """
-        self.qa_data = pp.qa_data.merge(pp.stud_data, on='students_id')
-        self.prof_data = pp.prof_data
+class BatchGenerator(keras.utils.Sequence):
+    def __init__(self, pos_size, neg_size, data_path='../../data/'):
+        self.pos_size = pos_size
+        self.neg_size = neg_size
         
-        # Select unique professionals from the ones that answered at least one question
-        self.unique_profs = pp.prof_data.professionals_id.unique()
+        que = pd.read_csv(data_path + 'questions.csv')
+        tag_que = pd.read_csv(data_path + 'tag_questions.csv')
+        tags = pd.read_csv(data_path + 'tags.csv')
+        pro = pd.read_csv(data_path + 'professionals.csv')
+        ans = pd.read_csv(data_path + 'answers.csv')
         
-        #----------------------------------------------------------------------------
-        #               INTEGRATION WITH NIKITA'S BATCH GENERATOR
-        #----------------------------------------------------------------------------
+        self.tp = TextProcessor()
+        pro['professionals_industry'] = pro['professionals_industry'].apply(self.tp.process)
+        tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))
         
-        # Load required datasets (their names are left as they were in Nikita's batch generator)
-        tag_que = pp.tag_questions
-        tags = pp.tags
-        pro = pp.prof_data
-        que = pp.qa_data
+        self.pro_ind = {row['professionals_id']: row['professionals_industry'] for i, row in pro.iterrows()}
         
-        # Import precomputed embeddings
+        que_tags = que.merge(tag_que, left_on = 'questions_id', right_on = 'tag_questions_question_id').merge(tags, left_on = 'tag_questions_tag_id', right_on = 'tags_tag_id')
+        que_tags = que_tags[['questions_id', 'tags_tag_name']].groupby(by = 'questions_id', as_index = False).aggregate(lambda x: ' '.join(x))
+        self.que_tag = {row['questions_id']: row['tags_tag_name'].split() for i, row in que_tags.iterrows()}
+        
+        ans_que = ans.merge(que, left_on = 'answers_question_id', right_on = 'questions_id')
+        ans_que_pro = ans_que.merge(pro, left_on = 'answers_author_id', right_on = 'professionals_id')
+        
+        self.ques = list(set(ans_que_pro['questions_id']))
+        self.pros = list(set(ans_que_pro['professionals_id']))
+        
+        self.que_pro_set = {(row['questions_id'], row['professionals_id']) for i, row in ans_que_pro.iterrows()}
+        self.que_pro_list = list(self.que_pro_set)
+        
         with open('tags_embs.pickle', 'rb') as file:
             self.tag_emb = pickle.load(file)
         with open('industries_embs.pickle', 'rb') as file:
             self.ind_emb = pickle.load(file)
-        
-        # Preprocess professionals industries
-        self.tp = TextProcessor()
-        pro['professionals_industry_textual'] = (pro['professionals_industry_textual']
-                                                 .apply(self.tp.process)
-                                                 .apply(lambda x: ' '.join(x)))
-        
-        # Map professionals_id to professionals_industry_textual
-        self.pro_ind = {row['professionals_id']: row['professionals_industry_textual'] for i, row in pro.iterrows()}
-        
-        # Create string of tags for every question
-        que_tags = (que.merge(tag_que, left_on='questions_id', right_on='tag_questions_question_id')
-                       .merge(tags, left_on='tag_questions_tag_id', right_on='tags_tag_id'))
-        que_tags = (que_tags[['questions_id', 'tags_tag_name']]
-                    .groupby('questions_id', as_index=False)
-                    .aggregate(lambda x: ' '.join(x)))
-        
-        # Map questions_id to string of tags
-        self.que_tag = {row['questions_id']: row['tags_tag_name'].split() for i, row in que_tags.iterrows()}
-        
-        #----------------------------------------------------------------------------
-        
-        # Set batch_size and shuffle parameters
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-        
-        # Initial shuffle 
-        self.on_epoch_end()
+            
+        # Load que and pro statistical features
+        with open('que_feature_dict.pickle', 'rb') as f:
+            self.que_features = pickle.load(f)
+        with open('pro_feature_dict.pickle', 'rb') as f:
+            self.pro_features = pickle.load(f)
     
     
     def __len__(self):
-        """
-        Denotes the number of batches per epoch
-        """
-        return self.qa_data.shape[0] // (self.batch_size)
+        return len(self.que_pro_list) // self.pos_size
+    
+    
+    def __convert(self, pairs):
+        x_que, x_pro = [], []
+        for i, (que, pro) in enumerate(pairs):
+            tmp = []
+            for tag in self.que_tag.get(que, []):
+                tmp.append(self.tag_emb.get(tag, np.zeros(10)))
+            if len(tmp) == 0:
+                tmp.append(np.zeros(10))
+            x_que.append(np.hstack( (self.que_features.get(que, np.zeros(17)), np.vstack(tmp).mean(axis = 0)) ))
+            x_pro.append(np.hstack( (self.pro_features.get(pro, np.zeros(12)), self.ind_emb.get(self.pro_ind[pro], np.zeros(10))) ))
+        
+        return np.vstack(x_que), np.vstack(x_pro)
     
     
     def __getitem__(self, index):
-        """
-        Generates one batch of data
-        """
-        # Positive batch is selected by index
-        positive_batch = self.qa_data.iloc[index * self.batch_size : (index + 1) * self.batch_size, :]
-        negative_batch = positive_batch
+        pos_pairs = self.que_pro_list[self.pos_size * index: self.pos_size * (index + 1)]
+        neg_pairs = []
         
-        # Choose random professionals for negative batch
-        cur_profs = negative_batch.professionals_id
-        new_profs = np.random.choice(self.unique_profs, self.batch_size)
+        for i in range(self.neg_size):
+            while True:
+                que = random.choice(self.ques)
+                pro = random.choice(self.pros)
+                if (que, pro) not in self.que_pro_set:
+                    neg_pairs.append((que, pro))
+                    break
         
-        # Check if all professionals from negative batch are different from true professionals
-        while np.sum(cur_profs == new_profs) > 0:
-            # If not (tiny probability), resample random professionals
-            new_profs = np.random.choice(self.unique_profs, self.batch_size)
+        x_pos_que, x_pos_pro = self.__convert(pos_pairs)
+        x_neg_que, x_neg_pro = self.__convert(neg_pairs)
         
-        # Assign random professionals to negative batch
-        negative_batch.assign(professionals_id=new_profs)
-        
-        # Concatenate positive and negative batches into a single batch
-        single_batch = pd.concat([positive_batch, negative_batch])
-        
-        # Add professionals data to single_batch
-        single_batch = single_batch.merge(self.prof_data, on='professionals_id')
-        
-        # Select statistical question features
-        x_que_features = single_batch[[
-            'students_location', 'students_state', 'students_questions_asked',
-            'students_average_question_age', 'students_average_question_body_length',
-            'students_average_answer_body_length',
-            
-            'students_date_joined_time', 'students_date_joined_doy_sin',
-            'students_date_joined_doy_cos', 'students_date_joined_dow',
-            
-            'questions_body_length',
-            
-            'questions_date_added_time', 'questions_date_added_doy_sin',
-            'questions_date_added_doy_cos', 'questions_date_added_dow',
-            'questions_date_added_hour_sin', 'questions_date_added_hour_cos',
-        ]].values
-        
-        # Select statistical professional features
-        x_pro_features = single_batch[[
-            'professionals_industry', 'professionals_location', 'professionals_state',
-            'professionals_questions_answered', 'professionals_average_question_age',
-            'professionals_average_question_body_length', 'professionals_average_answer_body_length',
-            'professionals_email_activated',
-            
-            'professionals_date_joined_time', 'professionals_date_joined_doy_sin',
-            'professionals_date_joined_doy_cos', 'professionals_date_joined_dow',
-            
-            'professionals_last_answer_date_time', 'professionals_last_answer_date_doy_sin',
-            'professionals_last_answer_date_doy_cos', 'professionals_last_answer_date_dow',
-            'professionals_last_answer_date_hour_sin', 'professionals_last_answer_date_hour_cos',
-        ]].values
-        
-        #----------------------------------------------------------------------------
-        #               INTEGRATION WITH NIKITA'S BATCH GENERATOR
-        #----------------------------------------------------------------------------
-        
-        # Extract embeddings from batch questions and professionals
-        x_que_embeddings, x_pro_embeddings = self.__convert(
-            single_batch[['questions_id', 'professionals_id']].values)
-        
-        # Stack statistical features and embeddings
-        x_que = np.hstack((x_que_features, x_que_embeddings))
-        x_pro = np.hstack((x_pro_features, x_pro_embeddings))
-        
-        #----------------------------------------------------------------------------
-        
-        # Create target array
-        y = np.concatenate([np.ones(self.batch_size), np.zeros(self.batch_size)])
-        
-        return [x_que_embeddings, x_pro_embeddings], y
+        return [np.vstack([x_pos_que, x_neg_que]), np.vstack([x_pos_pro, x_neg_pro])], \
+                np.vstack([np.ones((len(x_pos_que), 1)), np.zeros((len(x_neg_que), 1))])
     
     
     def on_epoch_end(self):
-        """
-        Shuffle qa_data after each epoch
-        """
-        if self.shuffle:
-            self.qa_data = shuffle(self.qa_data)
-    
-    
-    def __convert(self, batch):
-        """
-        Computes embeddings for questions based on average of precomputed tag embeddings
-        and embeddings for professionals based on precomputed industry embeddings
-        """
-        x_que, x_pro = [], []
-        
-        for que, pro in batch:
-            tmp = []
-            
-            for tag in self.que_tag.get(que, ['#']):
-                tmp.append(self.tag_emb.get(tag, np.zeros(10)))
-            x_que.append(np.vstack(tmp).mean(axis = 0))
-            x_pro.append(self.ind_emb.get(self.pro_ind[pro], np.zeros(10)))
-        
-        return np.vstack(x_que), np.vstack(x_pro)
-
+        self.que_pro_list = random.sample(self.que_pro_list, len(self.que_pro_list))

@@ -9,11 +9,11 @@ class TextProcessor:
         self.ps = PorterStemmer()
         self.stemmed = dict()
         
-    def process(self, text: str):
+    def process(self, text: str, allow_stopwords: bool = False):
         ret = []
         for word in re.split('[^a-zA-Z]', str(text).lower()):
-            if word.isalpha() and word not in self.stopwords:
+            if (word.isalpha() and word not in self.stopwords) or allow_stopwords:
                 if word not in self.stemmed:
                     self.stemmed[word] = self.ps.stem(word)
                 ret.append(self.stemmed[word])
-        return ret
+        return ' '.join(ret)
