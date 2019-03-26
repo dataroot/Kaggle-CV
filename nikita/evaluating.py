@@ -10,26 +10,23 @@ def permutation_importance(model, x_que, x_pro, y, fn):
     '''
     Calculate model feature importances via random permutations of feature values
     '''
-    base_loss = model.evaluate([x_que, x_pro], y)
+    base_loss, base_acc = model.evaluate([x_que, x_pro], y)
     losses = []
-    max_len = len(y)
     for i, name in enumerate(tqdmn(fn['que'] + fn['pro'])):
         n_tests, loss = 5, 0
         for j in range(n_tests):
             x_que_i, x_pro_i = copy.deepcopy(x_que), copy.deepcopy(x_pro)
             
             if name in fn['que']:
-                for l in range(max_len):
-                    x_que_i[l][:, i] = shuffle(x_que_i[l][:, i])
+                x_que_i[:, i] = shuffle(x_que_i[:, i])
             else:
-                for l in range(max_len):
-                    x_pro_i[l][:, :, i - len(fn['que'])] = shuffle(x_pro_i[l][:, :, i - len(fn['que'])])
-            loss += model.evaluate([x_que_i, x_pro_i], y)
+                x_pro_i[:, i - len(fn['que'])] = shuffle(x_pro_i[:, i - len(fn['que'])])
+            loss += model.evaluate([x_que_i, x_pro_i], y, verbose = 0)[0]
             
         losses.append(loss/ n_tests)
 
     fi = pd.DataFrame({'importance': losses}, index=fn['que'] + fn['pro'])
-    fi.sort_values(by='importance', inplace=True, ascending=False)
+    fi.sort_values(by='importance', inplace=True, ascending=True)
     fi['importance'] -= base_loss
 
     return fi

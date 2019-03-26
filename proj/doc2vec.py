@@ -24,7 +24,7 @@ def save(d2v, prefix):
     d2v.save(prefix + '.d2v')
     docvecs = {d2v.docvecs.index2entity[i]: d2v.docvecs.vectors_docs[i]
                for i in range(len(d2v.docvecs.index2entity))}
-    with open(prefix + '_embs.pickle', 'wb') as file:
+    with open(prefix + '_embs.pkl', 'wb') as file:
         pickle.dump(docvecs, file)
 
 
@@ -48,13 +48,14 @@ def pipeline(que, ans, pro, tags):
     ans_que_tags = ans.merge(que_tags, left_on="answers_question_id", right_on="questions_id")
     df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
 
-    d2v = train(df, 'tags_tag_name', features, 10).save('tags')
+    d2v = train(df, 'tags_tag_name', features, 10)
     save(d2v, 'tags')
 
-    que_tags = que_tags[['questions_id', 'tags_tag_name']].groupby(by='questions_id', as_index=False).sum()
+    que_tags = que_tags[['questions_id', 'tags_tag_name']].groupby(by='questions_id', as_index=False) \
+        .aggregate(lambda x: ' '.join(x))
     que_tags = que.merge(que_tags, on='questions_id')
     ans_que_tags = ans.merge(que_tags, left_on="answers_question_id", right_on="questions_id")
     df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
 
-    d2v = train(df, 'professionals_industry', features, 10).save('industries')
+    d2v = train(df, 'professionals_industry', features, 10)
     save(d2v, 'industries')
