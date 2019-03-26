@@ -48,14 +48,14 @@ def pipeline(que, ans, pro, tags):
     ans_que_tags = ans.merge(que_tags, left_on="answers_question_id", right_on="questions_id")
     df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
 
-    d2v = train(df, 'tags_tag_name', features, 10).save('tags')
+    d2v = train(df, 'tags_tag_name', features, 10)
     save(d2v, 'tags')
 
-    que_tags = que_tags[['questions_id', 'tags_tag_name']].groupby(by='questions_id', as_index=False)\
+    que_tags = que_tags[['questions_id', 'tags_tag_name']].groupby(by='questions_id', as_index=False) \
         .aggregate(lambda x: ' '.join(x))
     que_tags = que.merge(que_tags, on='questions_id')
     ans_que_tags = ans.merge(que_tags, left_on="answers_question_id", right_on="questions_id")
     df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
 
-    d2v = train(df, 'professionals_industry', features, 10).save('industries')
+    d2v = train(df, 'professionals_industry', features, 10)
     save(d2v, 'industries')

@@ -7,7 +7,7 @@ from nltk.corpus import stopwords
 
 
 class TextProcessor:
-    def __init__(self, path):
+    def __init__(self, path=''):
         self.path = path
 
         self.stopwords = stopwords.words('english')
