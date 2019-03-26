@@ -152,7 +152,7 @@ class BatchGenerator(Sequence):
         # Create target array
         y = np.concatenate([np.ones(self.batch_size), np.zeros(self.batch_size)])
         
-        return [x_que_embeddings, x_pro_embeddings], y
+        return [x_que, x_pro], y
     
     
     def on_epoch_end(self):
@@ -169,13 +169,12 @@ class BatchGenerator(Sequence):
         and embeddings for professionals based on precomputed industry embeddings
         """
         x_que, x_pro = [], []
-        
         for que, pro in batch:
             tmp = []
-            
-            for tag in self.que_tag.get(que, ['#']):
+            for tag in self.que_tag.get(que, []):
                 tmp.append(self.tag_emb.get(tag, np.zeros(10)))
-            
+            if len(tmp) == 0:
+                tmp.append(np.zeros(10))
             x_que.append(np.vstack(tmp).mean(axis = 0))
             x_pro.append(self.ind_emb.get(self.pro_ind[pro], np.zeros(10)))
         
