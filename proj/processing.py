@@ -180,7 +180,7 @@ class Questions(Base):
         }
         self._unroll_features()
 
-    def transform(self, que, ans, stu, tags, verbose) -> pd.DataFrame:
+    def transform(self, que, ans, stu, tags, time: str, verbose: bool) -> pd.DataFrame:
         tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))
 
         # Group tags and merge them with students and questions
@@ -234,6 +234,11 @@ class Questions(Base):
         # Add average question and answer body length features to stud_data
         df = df.merge(average_question_body_length, left_on='students_id', right_index=True)
 
+        print('TEST', df.shape)
+        if time is not None:
+            df = df[df['questions_date_added'] >= time]
+            print('TEST', df.shape)
+
         self.preprocess(df, verbose)
 
         emb_len = list(self.embs.values())[0].shape[0]
@@ -280,7 +285,7 @@ class Professionals(Base):
     # TODO: add email activated feature
     # TODO: add last answer date
 
-    def transform(self, pro, que, ans, verbose) -> pd.DataFrame:
+    def transform(self, pro, que, ans, verbose: bool) -> pd.DataFrame:
         pro['professionals_industry_raw'] = pro['professionals_industry'].apply(lambda x: self.tp.process(x))
 
         for df, feature in [(pro, 'professionals_date_joined'),

@@ -1,20 +1,35 @@
 import copy
 
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from jupyterthemes import jtplot
 
 from sklearn.utils import shuffle
+import keras
+
+jtplot.style('gruvboxd')
 
 
-def permutation_importance(model, x_que, x_pro, y, fn):
-    '''
-    Calculate model feature importances via random permutations of feature values
-    '''
+def permutation_importance(model: keras.models.Model, x_que: np.ndarray, x_pro: np.ndarray, y: np.ndarray,
+                           fn: dict, n_trials: int) -> pd.DataFrame:
+    """
+    Calculate model feature importance via random permutations of feature values
+
+    :param model: model to evaluate
+    :param x_que: pre-processed questions data
+    :param x_pro: pre-processed professionals data
+    :param y: target labels
+    :param fn: dict with feature names of both questions and professionals
+    :param n_trials: number of shuffles for each feature
+    :return: Pandas DataFrame with importance of each feature
+    """
+    # model performance on normal, non-shuffled data
     base_loss, base_acc = model.evaluate([x_que, x_pro], y)
     losses = []
     for i, name in enumerate(fn['que'] + fn['pro']):
-        n_tests, loss = 3, 0
-        for j in range(n_tests):
+        loss = 0
+        for j in range(n_trials):
             x_que_i, x_pro_i = copy.deepcopy(x_que), copy.deepcopy(x_pro)
 
             if name in fn['que']:
@@ -23,7 +38,7 @@ def permutation_importance(model, x_que, x_pro, y, fn):
                 x_pro_i[:, i - len(fn['que'])] = shuffle(x_pro_i[:, i - len(fn['que'])])
             loss += model.evaluate([x_que_i, x_pro_i], y, verbose=0)[0]
 
-        losses.append(loss / n_tests)
+        losses.append(loss / n_trials)
 
     fi = pd.DataFrame({'importance': losses}, index=fn['que'] + fn['pro'])
     fi.sort_values(by='importance', inplace=True, ascending=True)
@@ -33,9 +48,9 @@ def permutation_importance(model, x_que, x_pro, y, fn):
 
 
 def plot_fi(fi, fn, title='Feature importances via shuffle', xlabel='Change in loss after shuffling feature\'s values'):
-    '''
-    Nicely plot Pandas DataFrame with feature importances
-    '''
+    """
+    Nicely plot Pandas DataFrame with feature importance
+    """
     fi['color'] = 'b'
     fi.loc[fi.index.isin(fn['text']), 'color'] = 'r'
     fig, ax = plt.subplots(figsize=(8, 20))
@@ -47,9 +62,9 @@ def plot_fi(fi, fn, title='Feature importances via shuffle', xlabel='Change in l
 
 
 def vis_emb(model, layer, names, figsize, colors, title, s=None):
-    '''
+    """
     Visualize embeddings of a single feature
-    '''
+    """
     emb = (model.get_layer(layer).get_weights()[0])
     fig, ax = plt.subplots(figsize=figsize)
     ax.scatter(emb[:, 0], emb[:, 1], c=colors, s=s)

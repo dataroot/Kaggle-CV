@@ -1,65 +1,96 @@
+from pprint import pprint
+
+import pandas as pd
 from keras.optimizers import Adam
 
 from doc2vec import pipeline as pipeline_d2v
 from processing import Questions as QueProc, Professionals as ProProc
 from generator import BatchGenerator
 from modelling import Mothership
-from evaluating import *
+from evaluating import permutation_importance, plot_fi
 
 
-def split(df: pd.DataFrame, time: str):
-    col = [col for col in df.columns if 'date' in col][0]
-    df_before = df[df[col] < time]
-    df_after = df[df[col] >= time]
-    return df_before, df_after
-
-
-def drive(data_path: str, time: str):
+def drive(data_path: str):
+    """
+    Main function for data preparation, model training and evaluation pipeline
+    :param data_path: path to folder with initial .csv data files
+    """
     train, test = dict(), dict()
-    for var, file_name in [('que', 'questions.csv'), ('ans', 'answers.csv')]:
-        initial = pd.read_csv(data_path + file_name)
-        train[var], test[var] = split(initial, time)
-        print(train[var].shape, test[var].shape)
 
-    pro = pd.read_csv(data_path + 'professionals.csv')
+    # iterate over all the datasets needed to be split in train and test sets
+    for var, file_name in [('que', 'questions.csv'), ('ans', 'answers.csv'), ('pro', 'professionals.csv')]:
+        df = pd.read_csv(data_path + file_name)
+
+        # find the column to split dataset on
+        col = [col for col in df.columns if 'date' in col][0]
+
+        # some examples of possible split
+        train[var] = df
+        test[var] = df
+
+        """
+        if var != 'pro':
+            df = df[df[col] > '2010-01-01']
+        train[var] = df[df[col] < time]
+        test[var] = df
+        """
+
+        print(var, train[var].shape, test[var].shape)
+
+    # read all the remaining data needed further
     stu = pd.read_csv(data_path + 'students.csv')
-
     tag_que = pd.read_csv(data_path + 'tag_questions.csv')
     tags = pd.read_csv(data_path + 'tags.csv').merge(tag_que, left_on='tags_tag_id',
                                                      right_on='tag_questions_tag_id')
 
-    pipeline_d2v(train['que'], train['ans'], pro, tags, 10)
+    # launch pipeline of training and saving to drive updated doc2vec embeddings
+    # pipeline_d2v(train['que'], train['ans'], train['pro'], tags, 10)
 
-    model = Mothership(25, [102, 42], [2, 2], 21, [102, 102, 42], [2, 2, 2], 10)
-    print(model.summary())
+    # create the main model object
+    model = Mothership(que_dim=25, que_input_embs=[102, 42], que_output_embs=[2, 2],
+                       pro_dim=21, pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
+    # print(model.summary())
 
+    # make similar actions for both train and test data
     for mode, data in [('Train', train), ('Test', test)]:
         print(mode)
 
+        # create object for pre-processing question's data
         qp = QueProc(oblige_fit=(mode == 'Train'))
-        qt = qp.transform(data['que'], data['ans'], stu, tags, verbose=False)
+        # and apply it
+        qt = qp.transform(data['que'], data['ans'], stu, tags, time=None, verbose=False)
         print('Questions: ', qt.shape)
 
+        # same for professionals
         pp = ProProc(oblige_fit=(mode == 'Train'))
-        pt = pp.transform(pro, data['que'], data['ans'], verbose=False)
+        pt = pp.transform(data['pro'], data['que'], data['ans'], verbose=False)
         print('Professionals: ', pt.shape)
 
+        # create object to generate batches from pre-processed data
         bg = BatchGenerator(qt, pt, 64)
 
         if mode == 'Train':
+            # train and save model in train mode
             model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
-            model.fit_generator(bg, epochs=3, verbose=2)
+            model.fit_generator(bg, epochs=5, verbose=2)
             model.save_weights('model.h5')
         else:
+            # evaluate model in test mode
             print(model.evaluate_generator(bg))
 
+        # only to generate one big batch for evaluation purposes
         bg = BatchGenerator(qt, pt, 2048)
+
+        # dict with feature names of both questions and professionals
+        # with separated embedding features
         fn = {"que": list(qt.columns[2:]), "pro": list(pt.columns[2:]),
               'text': [f'que_emb_{i}' for i in range(10)] + [f'pro_emb_{i}' for i in range(10)]}
-        fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn)
-        print(fi)
+
+        # calculate feature importance
+        fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
+        # and plot it
         plot_fi(fi, fn)
 
 
 if __name__ == '__main__':
-    drive('../../data/', '2018-09-01')
+    drive('../../data/')
