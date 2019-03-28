@@ -132,7 +132,7 @@ class Preprocessor(DatasetCreator):
         """
         df[feature] = pd.to_datetime(df[feature])
 
-        df[feature + '_time'] = df[feature].apply(lambda d: d.year + d.dayofyear / 365)
+        df[feature + '_time'] = df[feature].apply(lambda d: d.year + (d.dayofyear + d.hour / 24) / 365)
         df[feature + '_doy_sin'] = df[feature].apply(lambda d: np.sin(2 * np.pi * d.dayofyear / 365))
         df[feature + '_doy_cos'] = df[feature].apply(lambda d: np.cos(2 * np.pi * d.dayofyear / 365))
         df[feature + '_dow'] = df[feature].apply(lambda d: d.weekday())
