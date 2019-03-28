@@ -33,7 +33,7 @@ class Base(ABC):
         self.features['all'] = [name for name, deg in self.features['categorical']] + \
                                self.features['numerical']['zero'] + self.features['numerical']['mean'] + \
                                [f + p for f in self.features['date']
-                                for p in ['_time', '_doy_sin', '_doy_cos', '_dow', '_hour_sin', '_hour_cos']]
+                                for p in ['_time', '_doy_sin', '_doy_cos', '_dow']]  # , '_hour_sin', '_hour_cos']]
 
     def datetime(self, df: pd.DataFrame, feature: str, hour: bool = False):
         """
@@ -134,7 +134,7 @@ class Base(ABC):
         """
         self.features['gen'] = []
         for feature in self.features['date']:
-            self.datetime(df, feature, hour=True)
+            self.datetime(df, feature, hour=False)
             if verbose:
                 print(feature)
 
@@ -149,6 +149,14 @@ class Base(ABC):
             self.categorical(df, feature, n)
             if verbose:
                 print(feature)
+
+    @staticmethod
+    def _questions_age(que, ans):
+        ans_date = ans[['answers_question_id', 'answers_date_added']].groupby('answers_question_id').min() \
+            .rename(columns={'answers_date_added': 'questions_first_answer_date_added'})
+        que = que.merge(ans_date, how='left', left_on='questions_id', right_index=True)
+        que['questions_age'] = que['questions_first_answer_date_added'] - que['questions_date_added']
+        return que
 
 
 # TODO: add regular expressions somewhere
@@ -188,12 +196,7 @@ class Questions(Base):
 
         # Add questions_age feature, which represents amount of time
         # from question emergence to a particular answer to that question
-        ans_date = ans[['answers_question_id', 'answers_date_added']].groupby('answers_question_id').min() \
-            .rename(columns={'answers_date_added': 'questions_first_answer_date_added'})
-
-        df = df.merge(ans_date, how='left', left_on='questions_id', right_index=True)
-
-        df['questions_age'] = df['questions_first_answer_date_added'] - df['questions_date_added']
+        df = Base._questions_age(df, ans)
 
         # average answers_body_length by student
         stu_ans = df.merge(ans, left_on='questions_id', right_on='answers_question_id')[['students_id', 'answers_body']]
@@ -226,7 +229,7 @@ class Questions(Base):
         df = df.merge(average_question_age, how='left', on='students_id')
 
         # Compute average question and answer body length for each student
-        average_question_body_length = df.groupby('students_id')[['questions_body_length']].mean() \
+        average_question_body_length = df[['students_id', 'questions_body_length']].groupby('students_id').mean() \
             .rename(columns={'questions_body_length': 'students_average_question_body_length'})
         # Add average question and answer body length features to stud_data
         df = df.merge(average_question_body_length, left_on='students_id', right_index=True)
@@ -246,7 +249,7 @@ class Questions(Base):
 
         mean_embs = df['tags_tag_name'].apply(__convert)
 
-        df = df[['answers_author_id'] + self.features['all']]
+        df = df[['questions_id', 'answers_author_id'] + self.features['all']]
 
         # append averaged tag embeddings
         for i in range(emb_len):
@@ -256,4 +259,81 @@ class Questions(Base):
 
 
 class Professionals(Base):
-    pass
+    def __init__(self, oblige_fit, path=''):
+        super().__init__(oblige_fit, path)
+
+        with open('industries_embs.pkl', 'rb') as file:
+            self.embs = pickle.load(file)
+
+        self.features = {
+            'categorical': [('professionals_industry', 100), ('professionals_location', 100),
+                            ('professionals_state', 40)],
+            'numerical': {
+                'zero': ['professionals_questions_answered'],
+                'mean': ['professionals_average_question_age', 'professionals_average_question_body_length',
+                         'professionals_average_answer_body_length']
+            },
+            'date': ['professionals_date_joined']  # , 'professionals_last_answer_date']
+        }
+        self._unroll_features()
+
+    # TODO: add email activated feature
+    # TODO: add last answer date
+
+    def transform(self, pro, que, ans, verbose) -> pd.DataFrame:
+        pro['professionals_industry_raw'] = pro['professionals_industry'].apply(lambda x: self.tp.process(x))
+
+        for df, feature in [(pro, 'professionals_date_joined'),
+                            (que, 'questions_date_added'), (ans, 'answers_date_added')]:
+            df[feature] = pd.to_datetime(df[feature])
+
+        # Count the number of answered questions by each professional
+        number_answered = ans[['answers_author_id', 'answers_question_id']].groupby('answers_author_id').count() \
+            .rename(columns={'answers_question_id': 'professionals_questions_answered'})
+
+        # Add professionals_questions_answered feature to prof_data
+        df = pro.merge(number_answered, how='left', left_on='professionals_id', right_index=True)
+
+        # Extract state or country from location
+        df['professionals_state'] = df['professionals_location'].apply(lambda loc: str(loc).split(', ')[-1])
+
+        # Get average question age for every professional among questions he answered
+
+        que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
+        ans['answers_body_length'] = ans['answers_body'].apply(lambda s: len(str(s)))
+
+        ans_date = ans[['answers_question_id', 'answers_date_added']].groupby('answers_question_id').min() \
+            .rename(columns={'answers_date_added': 'questions_first_answer_date_added'})
+
+        que = que.merge(ans_date, left_on='questions_id', right_on='answers_question_id')
+        que['questions_age'] = que['questions_first_answer_date_added'] - que['questions_date_added']
+
+        que_ans = que.merge(ans, how='left', left_on='questions_id', right_on='answers_question_id')
+
+        average_age_length = que_ans[['answers_author_id',
+                                      'questions_age', 'questions_body_length', 'answers_body_length']] \
+            .groupby('answers_author_id').mean(numeric_only=False) \
+            .rename(columns={'questions_age': 'professionals_average_question_age',
+                             'questions_body_length': 'professionals_average_question_body_length',
+                             'answers_body_length': 'professionals_average_answer_body_length'})
+
+        # Add professionals_average_question_age feature to prof_data
+        df = df.merge(average_age_length, how='left', left_on='professionals_id', right_index=True)
+
+        # list of links to questions
+        pro_que = ans[['answers_question_id', 'answers_author_id']].groupby('answers_author_id') \
+            .aggregate(lambda x: ' '.join(x))
+        df = df.merge(pro_que, how='left', left_on='professionals_id', right_on='answers_author_id')
+
+        self.preprocess(df, verbose)
+
+        emb_len = list(self.embs.values())[0].shape[0]
+        embs = df['professionals_industry_raw'].apply(lambda x: self.embs.get(x, np.zeros(emb_len)))
+
+        df = df[['professionals_id', 'answers_question_id'] + self.features['all']]
+
+        # append averaged tag embeddings
+        for i in range(emb_len):
+            df[f'pro_emb_{i}'] = embs.apply(lambda x: x[i])
+
+        return df

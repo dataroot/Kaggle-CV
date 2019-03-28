@@ -17,7 +17,7 @@ def train(df, target, features, dim):
         else:
             prepared += [TaggedDocument(s.split(), [s]) for s in df[target].drop_duplicates()]
     prepared = random.sample(prepared, len(prepared))
-    return Doc2Vec(prepared, vector_size=dim, workers=4, iter=20, dm=0)
+    return Doc2Vec(prepared, vector_size=dim, workers=4, epochs=10, dm=0)
 
 
 def save(d2v, prefix):
@@ -37,7 +37,7 @@ def vis(d2v):
     plt.show()
 
 
-def pipeline(que, ans, pro, tags):
+def pipeline(que, ans, pro, tags, dim):
     features = ['questions_title', 'questions_body', 'answers_body',
                 'tags_tag_name', 'professionals_industry', 'professionals_headline']
     tp = TextProcessor()
@@ -48,7 +48,7 @@ def pipeline(que, ans, pro, tags):
     ans_que_tags = ans.merge(que_tags, left_on="answers_question_id", right_on="questions_id")
     df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
 
-    d2v = train(df, 'tags_tag_name', features, 10)
+    d2v = train(df, 'tags_tag_name', features, dim)
     save(d2v, 'tags')
 
     que_tags = que_tags[['questions_id', 'tags_tag_name']].groupby(by='questions_id', as_index=False) \
@@ -57,5 +57,5 @@ def pipeline(que, ans, pro, tags):
     ans_que_tags = ans.merge(que_tags, left_on="answers_question_id", right_on="questions_id")
     df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
 
-    d2v = train(df, 'professionals_industry', features, 10)
+    d2v = train(df, 'professionals_industry', features, dim)
     save(d2v, 'industries')
