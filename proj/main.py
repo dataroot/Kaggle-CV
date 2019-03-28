@@ -1,7 +1,10 @@
-import pandas as pd
+from keras.optimizers import Adam
 
 from doc2vec import pipeline as pipeline_d2v
-from processing import Questions as QueProc
+from processing import Questions as QueProc, Professionals as ProProc
+from generator import BatchGenerator
+from modelling import Mothership
+from evaluating import *
 
 
 def split(df: pd.DataFrame, time: str):
@@ -25,13 +28,38 @@ def drive(data_path: str, time: str):
     tags = pd.read_csv(data_path + 'tags.csv').merge(tag_que, left_on='tags_tag_id',
                                                      right_on='tag_questions_tag_id')
 
-    # pipeline_d2v(train['que'], train['ans'], pro, tags)
+    pipeline_d2v(train['que'], train['ans'], pro, tags, 10)
 
-    qp = QueProc(oblige_fit=True)
-    qt = qp.transform(train['que'], train['ans'], stu, tags, verbose=False)
+    model = Mothership(25, [102, 42], [2, 2], 21, [102, 102, 42], [2, 2, 2], 10)
+    print(model.summary())
 
-    with pd.option_context('display.max_columns', 100):
-        print(qt)
+    for mode, data in [('Train', train), ('Test', test)]:
+        print(mode)
+
+        qp = QueProc(oblige_fit=(mode == 'Train'))
+        qt = qp.transform(data['que'], data['ans'], stu, tags, verbose=False)
+        print('Questions: ', qt.shape)
+
+        pp = ProProc(oblige_fit=(mode == 'Train'))
+        pt = pp.transform(pro, data['que'], data['ans'], verbose=False)
+        print('Professionals: ', pt.shape)
+
+        bg = BatchGenerator(qt, pt, 64)
+
+        if mode == 'Train':
+            model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
+            model.fit_generator(bg, epochs=3, verbose=2)
+            model.save_weights('model.h5')
+        else:
+            print(model.evaluate_generator(bg))
+
+        bg = BatchGenerator(qt, pt, 2048)
+        fn = {"que": list(qt.columns[2:]), "pro": list(pt.columns[2:]),
+              'text': [f'que_emb_{i}' for i in range(10)] + [f'pro_emb_{i}' for i in range(10)]}
+        fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn)
+        print(fi)
+        plot_fi(fi, fn)
 
 
-drive('../../data/', '2018-06-01')
+if __name__ == '__main__':
+    drive('../../data/', '2018-09-01')
