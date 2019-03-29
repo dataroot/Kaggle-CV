@@ -1,6 +1,7 @@
 import tensorflow as tf
 from keras.models import Model
 from keras.layers import Input, Dense, Lambda, Embedding, Concatenate
+from keras.regularizers import l2
 
 
 class Encoder(Model):
@@ -36,7 +37,7 @@ class Encoder(Model):
             self.inter = inputs
 
         # it's only a single linear transformation, actually
-        outputs = Dense(output_dim)(self.inter)
+        outputs = Dense(output_dim, kernel_regularizer=l2(0.5))(self.inter)
 
         super().__init__(inputs, outputs)
 
