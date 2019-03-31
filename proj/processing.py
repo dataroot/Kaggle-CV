@@ -170,13 +170,13 @@ class Questions(Base):
             self.embs = pickle.load(file)
 
         self.features = {
-            'categorical': [('students_location', 100), ('students_state', 40)],
+            'categorical': [],  # [('students_location', 100), ('students_state', 40)],
             'numerical': {
-                'zero': ['students_questions_asked', 'questions_body_length'],
-                'mean': ['students_average_question_age', 'students_average_question_body_length',
-                         'students_average_answer_body_length']
+                'zero': [],  # ['students_questions_asked', 'questions_body_length'],
+                'mean': [],  # ['students_average_question_age', 'students_average_question_body_length',
+                # 'students_average_answer_body_length']
             },
-            'date': ['students_date_joined', 'questions_date_added']
+            'date': []  # ['students_date_joined', 'questions_date_added']
         }
         self._unroll_features()
 
@@ -190,7 +190,7 @@ class Questions(Base):
         df = que_tags.merge(stu, left_on='questions_author_id', right_on='students_id')
 
         # Transform dates from string representation to datetime object
-        for date in self.features['date']:
+        for date in ['students_date_joined', 'questions_date_added']:
             df[date] = pd.to_datetime(df[date])
         ans['answers_date_added'] = pd.to_datetime(ans['answers_date_added'])
 
@@ -271,19 +271,19 @@ class Professionals(Base):
             self.embs = pickle.load(file)
 
         self.features = {
-            'categorical': [('professionals_industry', 100), ('professionals_location', 100),
-                            ('professionals_state', 40)],
+            'categorical': [],  # [('professionals_industry', 100), ('professionals_location', 100),
+            # ('professionals_state', 40)],
             'numerical': {
-                'zero': ['professionals_questions_answered'],
-                'mean': ['professionals_average_question_age', 'professionals_average_question_body_length',
-                         'professionals_average_answer_body_length']
+                'zero': [],  # ['professionals_questions_answered'],
+                'mean': []  # ['professionals_average_question_age', 'professionals_average_question_body_length',
+                #  'professionals_average_answer_body_length']
             },
-            'date': ['professionals_date_joined']  # , 'professionals_last_answer_date']
+            'date': []  # ['professionals_date_joined']  # , 'professionals_last_answer_date']
         }
         self._unroll_features()
 
     # TODO: add email activated feature
-    # TODO: add last answer date
+    # TODO: add previous answer date
 
     def transform(self, pro, que, ans, verbose: bool) -> pd.DataFrame:
         pro['professionals_industry_raw'] = pro['professionals_industry'].apply(lambda x: self.tp.process(x))
