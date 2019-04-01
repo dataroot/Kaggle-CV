@@ -192,25 +192,25 @@ class BatchGenerator(keras.utils.Sequence):
         pos_que_embeddings, pos_pro_embeddings = self.__convert(pos_pairs)
         neg_que_embeddings, neg_pro_embeddings = self.__convert(neg_pairs)
         
-        x_pos_que = np.hstack(
-            [np.array(pos_que_features),
-#              np.array(pos_cur_times)[:, np.newaxis],
-             pos_que_embeddings])
-        x_neg_que = np.hstack(
-            [np.array(neg_que_features),
-#              np.array(neg_cur_times)[:, np.newaxis],
-             neg_que_embeddings])
+        x_pos_que = np.hstack([
+#             np.array(pos_que_features),
+#             np.array(pos_cur_times)[:, np.newaxis],
+            pos_que_embeddings])
+        x_neg_que = np.hstack([
+#             np.array(neg_que_features),
+#             np.array(neg_cur_times)[:, np.newaxis],
+            neg_que_embeddings])
         
-        x_pos_pro = np.hstack(
-            [np.array(pos_pro_features),
-#              np.array(pos_prev_dates)[:, np.newaxis],
-#              np.array(pos_cur_times)[:, np.newaxis],
-             pos_pro_embeddings])
-        x_neg_pro = np.hstack(
-            [np.array(neg_pro_features),
-#              np.array(neg_prev_dates)[:, np.newaxis],
-#              np.array(neg_cur_times)[:, np.newaxis],
-             neg_pro_embeddings])
+        x_pos_pro = np.hstack([
+#             np.array(pos_pro_features),
+#             np.array(pos_prev_dates)[:, np.newaxis],
+#             np.array(pos_cur_times)[:, np.newaxis],
+            pos_pro_embeddings])
+        x_neg_pro = np.hstack([
+#             np.array(neg_pro_features),
+#             np.array(neg_prev_dates)[:, np.newaxis],
+#             np.array(neg_cur_times)[:, np.newaxis],
+            neg_pro_embeddings])
         
         return [np.vstack([x_pos_que, x_neg_que]), np.vstack([x_pos_pro, x_neg_pro])], \
                 np.vstack([np.ones((self.pos_size, 1)), np.zeros((self.neg_size, 1))])
