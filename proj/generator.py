@@ -15,7 +15,7 @@ class BatchGenerator(keras.utils.Sequence):
         """
         :param que: pre-processed questions data
         :param pro: pre-processed professionals data
-        :param batch_size: actually, half of the real batch size.
+        :param batch_size: actually, half of the real batch size
         Number of both positive and negative pairs present in generated batch
         """
         self.batch_size = batch_size
