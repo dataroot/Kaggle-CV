@@ -45,8 +45,8 @@ def drive(data_path: str):
     # create the main model object
     model = Mothership(que_dim=10, que_input_embs=[], que_output_embs=[],
                        pro_dim=10, pro_input_embs=[], pro_output_embs=[], inter_dim=10)
-    # model = Mothership(que_dim=10, que_input_embs=[102, 42], que_output_embs=[2, 2],
-    #                   pro_dim=10, pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
+    # model = Mothership(que_dim=25, que_input_embs=[102, 42], que_output_embs=[2, 2],
+    #                   pro_dim=21, pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
     # print(model.summary())
 
     # make similar actions for both train and test data
@@ -93,7 +93,7 @@ def drive(data_path: str):
               'text': [f'que_emb_{i}' for i in range(10)] + [f'pro_emb_{i}' for i in range(10)]}
 
         # calculate feature importance
-        fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
+        fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=5)
         # and plot it
         plot_fi(fi, fn)
 
