@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-import re
+import re, os
 
 
 class DatasetCreator:
@@ -68,12 +68,12 @@ class DatasetCreator:
         to get temporary dataset for further processing
         """
         # Merge questions with answers and delete not answered questions
-        all_data = self.questions.merge(self.answers, how='right', left_on='questions_id', right_on='answers_question_id')
+        all_data = self.questions.merge(self.answers, left_on='questions_id', right_on='answers_question_id')
         
         # Merge with professionals and students (students asked, professionals answered)
         # Maybe change this in the future by taking care of professional who change status to students and vise versa
-        all_data = all_data.merge(self.professionals, how='inner', left_on='answers_author_id', right_on='professionals_id')
-        all_data = all_data.merge(self.students, how='inner', left_on='questions_author_id', right_on='students_id')
+        all_data = all_data.merge(self.professionals, left_on='answers_author_id', right_on='professionals_id')
+        all_data = all_data.merge(self.students, left_on='questions_author_id', right_on='students_id')
         
         # Transform dates from string representation to datetime object
         all_data.answers_date_added = pd.to_datetime(all_data.answers_date_added)
@@ -103,7 +103,7 @@ class DatasetCreator:
         Creates question-answer pairs dataset called qa_data_data
         """
         # Temporary qa_data representation
-        qa_data = all_data
+        qa_data = all_data.copy()
         
         # Select only unique professionals
         temp = qa_data[['professionals_id', 'answers_date_added', 'answers_id']]
@@ -123,25 +123,28 @@ class DatasetCreator:
         
         # Get the sorted representation of the answers_date_added and shift the index down by one
         # so that current question is aligned with previous question answer date
-        last_answer_date = pd.DataFrame({'professionals_last_answer_date': temp.answers_date_added})
-        last_answer_date.index += 1
+        prev_answer_date = pd.DataFrame({'professionals_prev_answer_date': temp.answers_date_added})
+        prev_answer_date.index += 1
         
-        # Add the professionals_last_answer_date column to temp
-        temp = temp.merge(last_answer_date, left_index=True, right_index=True)
+        # Add the professionals_prev_answer_date column to temp
+        temp = temp.merge(prev_answer_date, left_index=True, right_index=True)
         temp.dropna(subset=['answers_id'], inplace=True)
         temp.drop(columns=['professionals_id', 'answers_date_added'], inplace=True)
         
-        # Add professionals_last_answer_date column to qa_data 
+        # Add professionals_prev_answer_date column to qa_data 
         qa_data = qa_data.merge(temp, on='answers_id')
         
         # Transform dates from string representation to datetime object
-        qa_data.professionals_last_answer_date = pd.to_datetime(qa_data.professionals_last_answer_date)
+        qa_data.professionals_prev_answer_date = pd.to_datetime(qa_data.professionals_prev_answer_date)
+        
+        print(qa_data[qa_data.professionals_id == '003cc21be89d4e42bc4424131a378e86']
+              [['answers_date_added', 'professionals_prev_answer_date']].sort_values(by='answers_date_added'))
         
         # Final qa_data representation
         qa_data = qa_data[[
             'students_id', 'questions_id', 'questions_title', 'questions_body',
             'questions_body_length', 'questions_date_added', 'professionals_id',
-            'answers_id', 'answers_body', 'professionals_last_answer_date'
+            'answers_id', 'answers_body', 'answers_date_added', 'professionals_prev_answer_date'
         ]]
         
         return qa_data
