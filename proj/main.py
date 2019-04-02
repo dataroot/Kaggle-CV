@@ -4,13 +4,13 @@ import pandas as pd
 from keras.optimizers import Adam
 
 from doc2vec import pipeline as pipeline_d2v
-from processing import Questions as QueProc, Professionals as ProProc
+from processing import QueProc, ProProc
 from generator import BatchGenerator
 from modelling import Mothership
 from evaluating import permutation_importance, plot_fi
 
 
-def drive(data_path: str):
+def drive(data_path: str, dump_path: str):
     """
     Main function for data preparation, model training and evaluation pipeline
     :param data_path: path to folder with initial .csv data files
@@ -54,12 +54,11 @@ def drive(data_path: str):
         print(mode)
 
         # create object for pre-processing question's data
-        qp = QueProc(oblige_fit=(mode == 'Train'))
+        qp = QueProc(oblige_fit=(mode == 'Train'), path=dump_path)
         # and apply it
         qt = qp.transform(data['que'], data['ans'], stu, tags,
                           # time=None,
-                          time=('2018-09-01' if mode == 'Test' else None),
-                          verbose=False)
+                          time=('2018-09-01' if mode == 'Test' else None))
         print('Questions: ', qt.shape)
 
         '''
@@ -68,8 +67,8 @@ def drive(data_path: str):
         '''
 
         # same for professionals
-        pp = ProProc(oblige_fit=(mode == 'Train'))
-        pt = pp.transform(data['pro'], data['que'], data['ans'], verbose=False)
+        pp = ProProc(oblige_fit=(mode == 'Train'), path=dump_path)
+        pt = pp.transform(data['pro'], data['que'], data['ans'])
         print('Professionals: ', pt.shape)
 
         # create object to generate batches from pre-processed data
@@ -79,7 +78,7 @@ def drive(data_path: str):
             # train and save model in train mode
             model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
             model.fit_generator(bg, epochs=10, verbose=2)
-            model.save_weights('model.h5')
+            model.save_weights(dump_path + 'model.h5')
         else:
             # evaluate model in test mode
             print(model.evaluate_generator(bg))
@@ -99,4 +98,4 @@ def drive(data_path: str):
 
 
 if __name__ == '__main__':
-    drive('../../data/')
+    drive('../../data/', 'dump/')

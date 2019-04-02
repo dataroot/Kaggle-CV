@@ -1,187 +1,14 @@
 import pickle
-import os
-from abc import ABC
 
 import pandas as pd
 import numpy as np
 
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from utils import TextProcessor
-
-
-class Base(ABC):
-    """
-    Class with implementation of basic preprocessors logic
-    """
-
-    def __init__(self, oblige_fit, path=''):
-        """
-        :param oblige_fit: whether it is necessary to fit new preprocessor even if the one exists in preprocessors.pkl
-        :param path: path to all the data
-        """
-        self.oblige_fit = oblige_fit
-        self.path = path
-
-        self.features = {
-            'categorical': [],
-            'numerical': {'zero': [], 'mean': []},
-            'date': []
-        }
-        self.embs = None
-
-        # load preprocessors, if existent
-        if os.path.isfile(self.path + 'preprocessors.pkl'):
-            with open(self.path + 'preprocessors.pkl', 'rb') as file:
-                self.pp = pickle.load(file)
-        else:
-            self.pp = {}
-
-        self.tp = TextProcessor(path)
-
-    def __del__(self):
-        # serialize updated preprocessors
-        with open(self.path + 'preprocessors.pkl', 'wb') as file:
-            pickle.dump(self.pp, file)
-
-    def _unroll_features(self):
-        """
-        Called once after self.features specification in constructor of child class,
-        unrolls all the features in single separate list self.features['all']
-        """
-        self.features['all'] = [name for name, deg in self.features['categorical']] + \
-                               self.features['numerical']['zero'] + self.features['numerical']['mean'] + \
-                               [f + p for f in self.features['date']
-                                for p in ['_time', '_doy_sin', '_doy_cos', '_dow']]
-
-    def datetime(self, df: pd.DataFrame, feature: str, hour: bool = False):
-        """
-        Generates a bunch of new datetime features and drops the original feature inplace
-
-        :param df: data to work with
-        :param feature: name of a column in df that contains date
-        :param hour: whether feature contains time
-        """
-        # iterate over suffix of generated features and function to calculate it
-        for suf, fun in [('_time', lambda d: d.year + (d.dayofyear + (d.hour / 24 if hour else 0)) / 365),
-                         ('_doy_sin', lambda d: np.sin(2 * np.pi * d.dayofyear / 365)),
-                         ('_doy_cos', lambda d: np.cos(2 * np.pi * d.dayofyear / 365)),
-                         ('_dow', lambda d: d.weekday())] + \
-                        ([('_hour_sin', lambda d: np.sin(2 * np.pi * (d.hour + d.minute / 60) / 24)),
-                          ('_hour_cos', lambda d: np.cos(2 * np.pi * (d.hour + d.minute / 60) / 24))]
-                        if hour else []):
-            df[feature + suf] = df[feature].apply(fun)
-            # add created feature to the list of generated features
-            self.features['gen'].append(feature + suf)
-
-        df.drop(columns=feature, inplace=True)
-
-    def __get_preprocessor(self, fit_data: np.array, feature: str, base):
-        """
-        Creates new preprocessor object of class base and fits it
-        or uses existing one in self.pp and returns it
-
-        :param fit_data: NumPy array of data to fit new preprocessor
-        :param feature: feature name to search for in self.pp
-        :param base: new preprocessor's class
-        :returns: preprocessor object
-        """
-        if feature in self.pp and not self.oblige_fit:
-            preproc = self.pp[feature]
-        else:
-            preproc = base()
-            preproc.fit(fit_data)
-            self.pp[feature] = preproc
-        return preproc
-
-    def numerical(self, df: pd.DataFrame, feature: str, fillmode: str):
-        """
-        Transforms via StandardScaler, fills NaNs according to fillmode
-
-        :param df: data to work with
-        :param feature: name of a column in df that contains numerical data
-        :param fillmode: method to fill NaNs, either 'mean' or 'zero'
-        """
-        # calculate default value and fill NaNs with it
-        na = df[feature].mean() if fillmode == 'mean' else 0
-        df[feature].fillna(na, inplace=True)
-
-        # standardize feature values
-        fit_data = df[feature].values.reshape(-1, 1).astype('float64')
-        sc = self.__get_preprocessor(fit_data, feature, StandardScaler)
-        df[feature] = sc.transform(fit_data)
-
-    def categorical(self, df: pd.DataFrame, feature: str, n: int):
-        """
-        Encodes top n most popular values with different labels from 0 to n-1,
-        remaining values with n and NaNs with n+1
-
-        :param df: data to work with
-        :param feature: name of a column in df that contains categorical data
-        :param n: number of top by popularity values to move in separate categories.
-                  0 to encode everything with different labels
-        """
-        vc = df[feature].value_counts()
-        # number of unique values to leave
-        n = len(vc) if n == 0 else n
-        # unique values to leave
-        top = set(vc[:n].index)
-        isin_top = df[feature].isin(top)
-
-        fit_data = df.loc[isin_top, feature]
-        le = self.__get_preprocessor(fit_data, feature, LabelEncoder)
-
-        # isin_le differs from isin_top if new preprocessor object was fitted
-        isin_le = df[feature].isin(set(le.classes_))
-        df.loc[isin_le, feature] = le.transform(df.loc[isin_le, feature])
-
-        # unique values to throw away - encode with single label n
-        bottom = set(vc.index) - set(le.classes_)
-        isin_bottom = df[feature].isin(bottom)
-        df.loc[isin_bottom, feature] = n
-
-        df[feature].fillna(n + 1, inplace=True)
-
-    def preprocess(self, df: pd.DataFrame, verbose=True):
-        """
-        Full preprocessing pipeline
-
-        :param df: data to work with.
-        :param verbose: whether to print some stupid log messages
-        """
-        # preprocess all date features
-        self.features['gen'] = []
-        for feature in self.features['date']:
-            self.datetime(df, feature, hour=False)
-            if verbose:
-                print(feature)
-
-        # preprocess all numerical features, including generated features from dates
-        for fillmode in self.features['numerical']:
-            for feature in self.features['numerical'][fillmode] + (self.features['gen'] if fillmode == 'mean' else []):
-                if feature in df.columns:
-                    self.numerical(df, feature, fillmode)
-                    if verbose:
-                        print(feature)
-
-        # preprocess all categorical features
-        for feature, n in self.features['categorical']:
-            self.categorical(df, feature, n)
-            if verbose:
-                print(feature)
-
-    @staticmethod
-    def _questions_age(que, ans):
-        ans_date = ans[['answers_question_id', 'answers_date_added']].groupby('answers_question_id').min() \
-            .rename(columns={'answers_date_added': 'questions_first_answer_date_added'})
-        que = que.merge(ans_date, how='left', left_on='questions_id', right_index=True)
-        que['questions_age'] = que['questions_first_answer_date_added'] - que['questions_date_added']
-        return que
+from baseproc import BaseProc
 
 
 # TODO: add regular expressions somewhere
 
-
-class Questions(Base):
+class QueProc(BaseProc):
     """
     Questions data preprocessor
     """
@@ -192,79 +19,33 @@ class Questions(Base):
         with open('tags_embs.pkl', 'rb') as file:
             self.embs = pickle.load(file)
 
-        '''
         self.features = {
-            'categorical': [('students_location', 100), ('students_state', 40)],
+            'categorical': [],
             'numerical': {
-                'zero': ['students_questions_asked', 'questions_body_length'],
-                'mean': ['students_average_question_age', 'students_average_question_body_length',
-                         'students_average_answer_body_length']
+                'zero': ['questions_body_length'],
+                'mean': []
             },
-            'date': ['students_date_joined', 'questions_date_added']
+            'date': ['questions_date_added']
         }
-        '''
         self._unroll_features()
 
-    def transform(self, que, ans, stu, tags, time: str, verbose: bool) -> pd.DataFrame:
+    # TODO: add number of tags feature
+
+    def transform(self, que, tags):
         tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))
 
-        # Group tags and merge them with students and questions
-        tags_grouped = tags[['tag_questions_question_id', 'tags_tag_name']] \
-            .groupby('tag_questions_question_id', as_index=False).aggregate(lambda x: ' '.join(x))
-        que_tags = que.merge(tags_grouped, how='left', left_on='questions_id', right_on='tag_questions_question_id')
-        df = que_tags.merge(stu, left_on='questions_author_id', right_on='students_id')
+        que['questions_date_added'] = pd.to_datetime(que['questions_date_added'])
+        que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
 
-        # Transform dates from string representation to datetime object
-        for date in ['students_date_joined', 'questions_date_added']:
-            df[date] = pd.to_datetime(df[date])
-        ans['answers_date_added'] = pd.to_datetime(ans['answers_date_added'])
-
-        # Add questions_age feature, which represents amount of time
-        # from question emergence to a particular answer to that question
-        df = Base._questions_age(df, ans)
-
-        # average answers_body_length by student
-        stu_ans = df.merge(ans, left_on='questions_id', right_on='answers_question_id')[['students_id', 'answers_body']]
-        stu_ans['answers_body'] = stu_ans['answers_body'].apply(lambda s: len(str(s)))
-        stu_ans = stu_ans.groupby('students_id').mean() \
-            .rename(columns={'answers_body': 'students_average_answer_body_length'})
-        df = df.merge(stu_ans, how='left', on='students_id')
-
-        # list of links to professionals
-        que_pro = ans[['answers_question_id', 'answers_author_id']].groupby('answers_question_id') \
+        tags_grouped = tags.groupby('tag_questions_question_id', as_index=False)[['tags_tag_name']] \
             .aggregate(lambda x: ' '.join(x))
-        df = df.merge(que_pro, how='left', left_on='questions_id', right_on='answers_question_id')
+        df = que.merge(tags_grouped, how='left', left_on='questions_id', right_on='tag_questions_question_id')
 
-        # Count the number of words in question and answer body and add two new features
-        df['questions_body_length'] = df['questions_body'].apply(lambda s: len(str(s)))
+        # launch feature pre-processing
 
-        # Extract state or country from location
-        df['students_state'] = df['students_location'].apply(lambda s: str(s).split(', ')[-1])
+        self.preprocess(df)
 
-        # Count the number of asked questions by each student
-        stu_num = df[['students_id', 'questions_id']].groupby('students_id').count() \
-            .rename(columns={'questions_id': 'students_questions_asked'})
-        # Add students_questions_answered feature to stud_data
-        df = df.merge(stu_num, how='left', left_on='students_id', right_index=True)
-
-        # Get average question age for every student among questions he asked that were answered
-        average_question_age = df[['students_id', 'questions_age']].groupby('students_id').mean(numeric_only=False) \
-            .rename(columns={'questions_age': 'students_average_question_age'})
-        # Add professionals_average_question_age feature to prof_data
-        df = df.merge(average_question_age, how='left', on='students_id')
-
-        # Compute average question and answer body length for each student
-        average_question_body_length = df[['students_id', 'questions_body_length']].groupby('students_id').mean() \
-            .rename(columns={'questions_body_length': 'students_average_question_body_length'})
-        # Add average question and answer body length features to stud_data
-        df = df.merge(average_question_body_length, left_on='students_id', right_index=True)
-
-        print('TEST', df.shape)
-        if time is not None:
-            df = df[df['questions_date_added'] >= time]
-            print('TEST', df.shape)
-
-        self.preprocess(df, verbose)
+        # prepare tag embeddings
 
         emb_len = list(self.embs.values())[0].shape[0]
 
@@ -279,16 +60,58 @@ class Questions(Base):
 
         mean_embs = df['tags_tag_name'].apply(__convert)
 
+        # re-order the columns
         df = df[['questions_id', 'answers_author_id'] + self.features['all']]
 
-        # append averaged tag embeddings
+        # append tag embeddings
         for i in range(emb_len):
             df[f'que_emb_{i}'] = mean_embs.apply(lambda x: x[i])
 
         return df
 
 
-class Professionals(Base):
+class StuProc(BaseProc):
+    """
+    Students data preprocessor
+    """
+
+    def __init__(self, oblige_fit, path=''):
+        super().__init__(oblige_fit, path)
+
+        self.features = {
+            'categorical': [('students_location', 100), ('students_state', 40)],
+            'numerical': {
+                'zero': ['students_questions_asked', 'students_time_since_last_question'],
+                'mean': ['students_average_question_age', 'students_average_question_body_length',
+                         'students_average_answer_body_length', 'students_average_answer_amount']
+            },
+            'date': ['students_date_joined']
+        }
+
+    def transform(self, que, ans, stu) -> pd.DataFrame:
+        stu['students_state'] = stu['students_location'].apply(lambda s: str(s).split(', ')[-1])
+
+        for df, feature in [(stu, 'students_date_joined'),
+                            (que, 'questions_date_added'), (ans, 'answers_date_added')]:
+            df[feature] = pd.to_datetime(df[feature])
+
+        ans_grouped = ans.groupby('answers_question_id')
+        df = stu.merge(que, left_on='students_id', right_on='questions_author_id') \
+            .sort_values('answers_date_added')
+        data = {}
+
+        for i, row in df.iterrows():
+            cur_stu = row['students_id']
+
+            if cur_stu not in data:
+                data[cur_stu] = {'questions': [cur_stu['questions_id']],
+                                 'students_questions_asked': [0],
+                                 'students_time_since_last_question':
+                                     [row['questions_date_added'] - row['students_date_joined']]}
+            # under construction
+
+
+class ProProc(BaseProc):
     """
     Professionals data preprocessor
     """
@@ -313,9 +136,11 @@ class Professionals(Base):
         self._unroll_features()
 
     # TODO: add email activated feature
-    # TODO: add previous answer date
+    # TODO: add previous answer date feature
 
-    def transform(self, pro, que, ans, verbose: bool) -> pd.DataFrame:
+    # TODO: make the same changes as in QueProc and StuProc
+
+    def transform(self, pro, que, ans) -> pd.DataFrame:
         pro['professionals_industry_raw'] = pro['professionals_industry'].apply(lambda x: self.tp.process(x))
 
         for df, feature in [(pro, 'professionals_date_joined'),
@@ -360,7 +185,7 @@ class Professionals(Base):
             .aggregate(lambda x: ' '.join(x))
         df = df.merge(pro_que, how='left', left_on='professionals_id', right_on='answers_author_id')
 
-        self.preprocess(df, verbose)
+        self.preprocess(df)
 
         emb_len = list(self.embs.values())[0].shape[0]
         embs = df['professionals_industry_raw'].apply(lambda x: self.embs.get(x, np.zeros(emb_len)))
