@@ -5,6 +5,8 @@ import numpy as np
 
 from baseproc import BaseProc
 
+from tqdm import tqdm
+
 
 # TODO: add regular expressions somewhere
 
@@ -81,11 +83,11 @@ class StuProc(BaseProc):
         self.features = {
             'categorical': [('students_location', 100), ('students_state', 40)],
             'numerical': {
-                'zero': ['students_questions_asked', 'students_time_since_last_question'],
+                'zero': ['students_questions_asked'],
                 'mean': ['students_average_question_age', 'students_average_question_body_length',
                          'students_average_answer_body_length', 'students_average_answer_amount']
             },
-            'date': ['students_date_joined']
+            'date': ['students_date_joined', 'students_previous_question_time']
         }
 
     def transform(self, que, ans, stu) -> pd.DataFrame:
@@ -97,18 +99,53 @@ class StuProc(BaseProc):
 
         ans_grouped = ans.groupby('answers_question_id')
         df = stu.merge(que, left_on='students_id', right_on='questions_author_id') \
-            .sort_values('answers_date_added')
+            .sort_values('questions_date_added')
         data = {}
+        ans_cnt = 0
 
-        for i, row in df.iterrows():
+        for i, row in tqdm(df.iterrows()):
             cur_stu = row['students_id']
 
             if cur_stu not in data:
-                data[cur_stu] = {'questions': [cur_stu['questions_id']],
-                                 'students_questions_asked': [0],
-                                 'students_time_since_last_question':
-                                     [row['questions_date_added'] - row['students_date_joined']]}
-            # under construction
+                data[cur_stu] = []
+                new = {'students_questions_asked': 0,
+                       'students_previous_question_time': row['students_date_joined']}
+                for feature in ['questions', 'students_average_question_age', 'students_average_question_body_length',
+                                'students_average_answer_body_length', 'students_average_answer_amount']:
+                    new[feature] = None
+            else:
+                prv = data[cur_stu][-1]
+                new = {'questions': row['questions_id'],
+                       'students_questions_asked': prv['students_questions_asked'] + 1,
+                       'students_previous_question_time': row['questions_date_added']}
+                if row['questions_id'] in ans_grouped.groups:
+                    group = ans_grouped.get_group(row['questions_id'])
+                    new = {**new, **{'students_average_question_age':
+                                         group['answers_date_added'].iloc[0] - row['questions_date_added'],
+                                     'students_average_question_body_length':
+                                         len(str(row['questions_body'])),
+                                     'students_average_answer_body_length':
+                                         group['answers_body']
+                                             .apply(lambda s: len(str(s))).sum() / group.shape[0],
+                                     'students_average_answer_amount':
+                                         group.shape[0]}}
+                    length = len(data[cur_stu])
+                    if length != 1:
+                        prv = data[cur_stu][-1]
+                        for feature in ['students_average_question_age', 'students_average_question_body_length']:
+                            if prv[feature] is not None:
+                                new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
+                        for feature in ['students_average_answer_body_length', 'students_average_answer_amount']:
+                            if prv[feature] is not None:
+                                new[feature] = (prv[feature] * ans_cnt + new[feature]) / (ans_cnt + group.shape[0])
+                    ans_cnt += group.shape[0]
+                else:
+                    for feature in ['students_average_question_age', 'students_average_question_body_length',
+                                    'students_average_answer_body_length', 'students_average_answer_amount']:
+                        new[feature] = prv[feature]
+            data[cur_stu].append(new)
+
+
 
 
 class ProProc(BaseProc):
