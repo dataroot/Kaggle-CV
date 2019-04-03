@@ -13,9 +13,10 @@ class BatchGenerator(keras.utils.Sequence):
     Generates batch of data in train and test modes
     """
     
-    def __init__(self, pos_size, neg_size, mode='train', data_path='../../data/'):
+    def __init__(self, pos_size, neg_size, mode='train', return_stat=True, data_path='../../data/'):
         self.pos_size = pos_size
         self.neg_size = neg_size
+        self.return_stat = return_stat
         
         que = pd.read_csv(data_path + 'questions.csv')
         tag_que = pd.read_csv(data_path + 'tag_questions.csv')
@@ -183,28 +184,41 @@ class BatchGenerator(keras.utils.Sequence):
         pos_que_embeddings, pos_pro_embeddings = self.__convert(pos_pairs)
         neg_que_embeddings, neg_pro_embeddings = self.__convert(neg_pairs)
         
-        x_pos_que = np.hstack([
-#             np.array(pos_que_features),
+        pos_que_stat = np.hstack([
+            np.array(pos_que_features),
 #             np.array(pos_cur_times)[:, np.newaxis],
-            pos_que_embeddings])
-        x_neg_que = np.hstack([
-#             np.array(neg_que_features),
+#             pos_que_embeddings,
+        ])
+        neg_que_stat = np.hstack([
+            np.array(neg_que_features),
 #             np.array(neg_cur_times)[:, np.newaxis],
-            neg_que_embeddings])
+#             neg_que_embeddings,
+        ])
         
-        x_pos_pro = np.hstack([
-#             np.array(pos_pro_features),
-#             np.array(pos_prev_dates)[:, np.newaxis],
+        pos_pro_stat = np.hstack([
+            np.array(pos_pro_features),
+            np.array(pos_prev_dates)[:, np.newaxis],
 #             np.array(pos_cur_times)[:, np.newaxis],
-            pos_pro_embeddings])
-        x_neg_pro = np.hstack([
-#             np.array(neg_pro_features),
-#             np.array(neg_prev_dates)[:, np.newaxis],
+#             pos_pro_embeddings,
+        ])
+        neg_pro_stat = np.hstack([
+            np.array(neg_pro_features),
+            np.array(neg_prev_dates)[:, np.newaxis],
 #             np.array(neg_cur_times)[:, np.newaxis],
-            neg_pro_embeddings])
+#             neg_pro_embeddings,
+        ])
         
-        return [np.vstack([x_pos_que, x_neg_que]), np.vstack([x_pos_pro, x_neg_pro])], \
-                np.vstack([np.ones((self.pos_size, 1)), np.zeros((self.neg_size, 1))])
+        return_list = [
+            np.vstack([pos_que_embeddings, neg_que_embeddings]), np.vstack([pos_pro_embeddings, neg_pro_embeddings])]
+        
+        # TODO: change features to stat
+        if self.return_stat:
+            return_list.append(np.vstack([pos_que_features, neg_que_features]))
+            return_list.append(np.vstack([pos_pro_features, neg_pro_features]))
+        
+        target = np.vstack([np.ones((self.pos_size, 1)), np.zeros((self.neg_size, 1))])
+        
+        return return_list, target
     
     
     def __negative_que_prev_answer_date(self, pro, cur_time):
