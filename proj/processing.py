@@ -187,54 +187,22 @@ class ProProc(BaseProc):
     # TODO: make the same changes as in QueProc and StuProc
 
     def transform(self, pro, que, ans) -> pd.DataFrame:
-        pro['professionals_industry_raw'] = pro['professionals_industry'].apply(lambda x: self.tp.process(x))
+        pro['professionals_state'] = pro['professionals_location'].apply(lambda loc: str(loc).split(', ')[-1])
+
+        pro['professionals_industry_processed'] = pro['professionals_industry'].apply(lambda x: self.tp.process(x))
+        que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
+        ans['answers_body_length'] = ans['answers_body'].apply(lambda s: len(str(s)))
 
         for df, feature in [(pro, 'professionals_date_joined'),
                             (que, 'questions_date_added'), (ans, 'answers_date_added')]:
             df[feature] = pd.to_datetime(df[feature])
 
-        # Count the number of answered questions by each professional
-        number_answered = ans[['answers_author_id', 'answers_question_id']].groupby('answers_author_id').count() \
-            .rename(columns={'answers_question_id': 'professionals_questions_answered'})
-
-        # Add professionals_questions_answered feature to prof_data
-        df = pro.merge(number_answered, how='left', left_on='professionals_id', right_index=True)
-
-        # Extract state or country from location
-        df['professionals_state'] = df['professionals_location'].apply(lambda loc: str(loc).split(', ')[-1])
-
-        # Get average question age for every professional among questions he answered
-
-        que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
-        ans['answers_body_length'] = ans['answers_body'].apply(lambda s: len(str(s)))
-
-        ans_date = ans[['answers_question_id', 'answers_date_added']].groupby('answers_question_id').min() \
-            .rename(columns={'answers_date_added': 'questions_first_answer_date_added'})
-
-        que = que.merge(ans_date, left_on='questions_id', right_on='answers_question_id')
-        que['questions_age'] = que['questions_first_answer_date_added'] - que['questions_date_added']
-
-        que_ans = que.merge(ans, how='left', left_on='questions_id', right_on='answers_question_id')
-
-        average_age_length = que_ans[['answers_author_id',
-                                      'questions_age', 'questions_body_length', 'answers_body_length']] \
-            .groupby('answers_author_id').mean(numeric_only=False) \
-            .rename(columns={'questions_age': 'professionals_average_question_age',
-                             'questions_body_length': 'professionals_average_question_body_length',
-                             'answers_body_length': 'professionals_average_answer_body_length'})
-
-        # Add professionals_average_question_age feature to prof_data
-        df = df.merge(average_age_length, how='left', left_on='professionals_id', right_index=True)
-
-        # list of links to questions
-        pro_que = ans[['answers_question_id', 'answers_author_id']].groupby('answers_author_id') \
-            .aggregate(lambda x: ' '.join(x))
-        df = df.merge(pro_que, how='left', left_on='professionals_id', right_on='answers_author_id')
+        pass
 
         self.preprocess(df)
 
         emb_len = list(self.embs.values())[0].shape[0]
-        embs = df['professionals_industry_raw'].apply(lambda x: self.embs.get(x, np.zeros(emb_len)))
+        embs = df['professionals_industry_processed'].apply(lambda x: self.embs.get(x, np.zeros(emb_len)))
 
         df = df[['professionals_id', 'answers_question_id'] + self.features['all']]
 
