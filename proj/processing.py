@@ -72,6 +72,8 @@ class QueProc(BaseProc):
         return df
 
 
+# TODO: standardize after filling NaNs
+
 class StuProc(BaseProc):
     """
     Students data preprocessor
@@ -110,12 +112,13 @@ class StuProc(BaseProc):
                 data[cur_stu] = []
                 new = {'students_questions_asked': 0,
                        'students_previous_question_time': row['students_date_joined']}
-                for feature in ['questions', 'students_average_question_age', 'students_average_question_body_length',
+                for feature in ['questions_id', 'students_average_question_age',
+                                'students_average_question_body_length',
                                 'students_average_answer_body_length', 'students_average_answer_amount']:
                     new[feature] = None
             else:
                 prv = data[cur_stu][-1]
-                new = {'questions': row['questions_id'],
+                new = {'questions_id': row['questions_id'],
                        'students_questions_asked': prv['students_questions_asked'] + 1,
                        'students_previous_question_time': row['questions_date_added']}
                 if row['questions_id'] in ans_grouped.groups:
@@ -126,7 +129,7 @@ class StuProc(BaseProc):
                                          len(str(row['questions_body'])),
                                      'students_average_answer_body_length':
                                          group['answers_body']
-                                             .apply(lambda s: len(str(s))).sum() / group.shape[0],
+                                             .apply(lambda s: len(str(s))).sum(),
                                      'students_average_answer_amount':
                                          group.shape[0]}}
                     length = len(data[cur_stu])
@@ -145,7 +148,13 @@ class StuProc(BaseProc):
                         new[feature] = prv[feature]
             data[cur_stu].append(new)
 
+        df = pd.DataFrame([{**f, **{'students_id': id}} for (id, fs) in data.items() for f in fs])
+        df['questions_id'] = df['questions_id'].shift(-1)
 
+        df = df.merge(stu, on='students_id')
+        self.preprocess(df)
+
+        return df
 
 
 class ProProc(BaseProc):
