@@ -63,7 +63,7 @@ class QueProc(BaseProc):
         mean_embs = df['tags_tag_name'].apply(__convert)
 
         # re-order the columns
-        df = df[['questions_id', 'answers_author_id'] + self.features['all']]
+        df = df[['questions_id'] + self.features['all']]
 
         # append tag embeddings
         for i in range(emb_len):
@@ -73,6 +73,8 @@ class QueProc(BaseProc):
 
 
 # TODO: standardize after filling NaNs
+# TODO: consider question_body_length even if answers are absent
+# TODO: compute feature for students with no questions and professionals with no answers also
 
 class StuProc(BaseProc):
     """
@@ -92,8 +94,11 @@ class StuProc(BaseProc):
             'date': ['students_date_joined', 'students_previous_question_time']
         }
 
-    def transform(self, que, ans, stu) -> pd.DataFrame:
+    def transform(self, stu, que, ans) -> pd.DataFrame:
         stu['students_state'] = stu['students_location'].apply(lambda s: str(s).split(', ')[-1])
+
+        que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
+        ans['answers_body_length'] = ans['answers_body'].apply(lambda s: len(str(s)))
 
         for df, feature in [(stu, 'students_date_joined'),
                             (que, 'questions_date_added'), (ans, 'answers_date_added')]:
@@ -109,43 +114,41 @@ class StuProc(BaseProc):
             cur_stu = row['students_id']
 
             if cur_stu not in data:
-                data[cur_stu] = []
                 new = {'students_questions_asked': 0,
                        'students_previous_question_time': row['students_date_joined']}
                 for feature in ['questions_id', 'students_average_question_age',
                                 'students_average_question_body_length',
                                 'students_average_answer_body_length', 'students_average_answer_amount']:
                     new[feature] = None
+                data[cur_stu] = [new]
+
+            prv = data[cur_stu][-1]
+            new = {'questions_id': row['questions_id'],
+                   'students_questions_asked': prv['students_questions_asked'] + 1,
+                   'students_previous_question_time': row['questions_date_added']}
+            if row['questions_id'] in ans_grouped.groups:
+                group = ans_grouped.get_group(row['questions_id'])
+                new = {**new, **{'students_average_question_age':
+                                     group['answers_date_added'].iloc[0] - row['questions_date_added'],
+                                 'students_average_question_body_length':
+                                     row['questions_body_length'],
+                                 'students_average_answer_body_length':
+                                     group['answers_body_length'].sum(),
+                                 'students_average_answer_amount':
+                                     group.shape[0]}}
+                length = len(data[cur_stu])
+                if length != 1:
+                    for feature in ['students_average_question_age', 'students_average_question_body_length']:
+                        if prv[feature] is not None:
+                            new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
+                    for feature in ['students_average_answer_body_length', 'students_average_answer_amount']:
+                        if prv[feature] is not None:
+                            new[feature] = (prv[feature] * ans_cnt + new[feature]) / (ans_cnt + group.shape[0])
+                ans_cnt += group.shape[0]
             else:
-                prv = data[cur_stu][-1]
-                new = {'questions_id': row['questions_id'],
-                       'students_questions_asked': prv['students_questions_asked'] + 1,
-                       'students_previous_question_time': row['questions_date_added']}
-                if row['questions_id'] in ans_grouped.groups:
-                    group = ans_grouped.get_group(row['questions_id'])
-                    new = {**new, **{'students_average_question_age':
-                                         group['answers_date_added'].iloc[0] - row['questions_date_added'],
-                                     'students_average_question_body_length':
-                                         len(str(row['questions_body'])),
-                                     'students_average_answer_body_length':
-                                         group['answers_body']
-                                             .apply(lambda s: len(str(s))).sum(),
-                                     'students_average_answer_amount':
-                                         group.shape[0]}}
-                    length = len(data[cur_stu])
-                    if length != 1:
-                        prv = data[cur_stu][-1]
-                        for feature in ['students_average_question_age', 'students_average_question_body_length']:
-                            if prv[feature] is not None:
-                                new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
-                        for feature in ['students_average_answer_body_length', 'students_average_answer_amount']:
-                            if prv[feature] is not None:
-                                new[feature] = (prv[feature] * ans_cnt + new[feature]) / (ans_cnt + group.shape[0])
-                    ans_cnt += group.shape[0]
-                else:
-                    for feature in ['students_average_question_age', 'students_average_question_body_length',
-                                    'students_average_answer_body_length', 'students_average_answer_amount']:
-                        new[feature] = prv[feature]
+                for feature in ['students_average_question_age', 'students_average_question_body_length',
+                                'students_average_answer_body_length', 'students_average_answer_amount']:
+                    new[feature] = prv[feature]
             data[cur_stu].append(new)
 
         df = pd.DataFrame([{**f, **{'students_id': id}} for (id, fs) in data.items() for f in fs])
@@ -153,6 +156,8 @@ class StuProc(BaseProc):
 
         df = df.merge(stu, on='students_id')
         self.preprocess(df)
+
+        df = df[['students_id', 'questions_id'] + self.features['all']]
 
         return df
 
@@ -165,9 +170,9 @@ class ProProc(BaseProc):
     def __init__(self, oblige_fit, path=''):
         super().__init__(oblige_fit, path)
 
-        with open('industries_embs.pkl', 'rb') as file:
+        with open(path + 'industries_embs.pkl', 'rb') as file:
             self.embs = pickle.load(file)
-        '''
+
         self.features = {
             'categorical': [('professionals_industry', 100), ('professionals_location', 100),
                             ('professionals_state', 40)],
@@ -176,15 +181,12 @@ class ProProc(BaseProc):
                 'mean': ['professionals_average_question_age', 'professionals_average_question_body_length',
                          'professionals_average_answer_body_length']
             },
-            'date': ['professionals_date_joined']
+            'date': ['professionals_date_joined', 'professionals_previous_answer_date']
         }
-        '''
+
         self._unroll_features()
 
     # TODO: add email activated feature
-    # TODO: add previous answer date feature
-
-    # TODO: make the same changes as in QueProc and StuProc
 
     def transform(self, pro, que, ans) -> pd.DataFrame:
         pro['professionals_state'] = pro['professionals_location'].apply(lambda loc: str(loc).split(', ')[-1])
@@ -197,14 +199,48 @@ class ProProc(BaseProc):
                             (que, 'questions_date_added'), (ans, 'answers_date_added')]:
             df[feature] = pd.to_datetime(df[feature])
 
-        pass
+        df = pro.merge(ans, left_on='professionals_id', right_on='answers_author_id') \
+            .merge(que, left_on='answers_question_id', right_on='questions_id') \
+            .sort_values('professionals_date_joined')
+        data = {}
 
+        for i, row in tqdm(df.iterrows()):
+            cur_pro = row['professionals_id']
+
+            if cur_pro not in data:
+                new = {'professionals_questions_answered': 0,
+                       'professionals_previous_answer_date': row['professionals_date_joined']}
+                for feature in ['questions_id', 'professionals_average_question_age',
+                                'professionals_average_question_body_length',
+                                'professionals_average_answer_body_length']:
+                    new[feature] = None
+                data[cur_pro] = [new]
+
+            prv = data[cur_pro][-1]
+            new = {'questions_id': row['questions_id'],
+                   'professionals_questions_answered': prv['professionals_questions_answered'] + 1,
+                   'professionals_previous_answer_date': row['answers_date_added'],
+                   'professionals_average_question_age': (row['answers_date_added'] - row[
+                       'questions_date_added']) / np.timedelta64(1, 's'),
+                   'professionals_average_question_body_length': row['questions_body_length'],
+                   'professionals_average_answer_body_length': row['answers_body_length']}
+            length = len(data[cur_pro])
+            if length != 1:
+                for feature in ['professionals_average_question_age', 'professionals_average_question_body_length',
+                                'professionals_average_answer_body_length']:
+                    new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
+            data[cur_pro].append(new)
+
+        df = pd.DataFrame([{**f, **{'professionals_id': id}} for (id, fs) in data.items() for f in fs])
+        df['questions_id'].shift(-1)
+
+        df = df.merge(pro, on='professionals_id')
         self.preprocess(df)
 
         emb_len = list(self.embs.values())[0].shape[0]
         embs = df['professionals_industry_processed'].apply(lambda x: self.embs.get(x, np.zeros(emb_len)))
 
-        df = df[['professionals_id', 'answers_question_id'] + self.features['all']]
+        df = df[['professionals_id', 'questions_id'] + self.features['all']]
 
         # append averaged tag embeddings
         for i in range(emb_len):
