@@ -143,35 +143,47 @@ class BatchGenerator(keras.utils.Sequence):
             threshold = np.searchsorted(self.pro_reg_date_list, cur_time)
             valid_pros = self.pro_list[:threshold]
             
-            # Sample 50 (or less) pros among valid ones
-            sampled_pros = random.sample(valid_pros, min(50, len(valid_pros)))
-            
             # Transform current time with preprocessor for professionals_prev_answer_date_time
             cur_time = self.preproc['professionals_prev_answer_date_time'].transform([[cur_time]])[0][0]
             
-            pros = []
-            prev_answer_dates = []
+#             #-------------------------------------------------------------------------
+#             #                          WITH DISTRIBUTION
             
-            # Compute previous answer date for every sampled professional
-            for pro in sampled_pros:
-                if (que, pro) not in self.que_pro_set:
-                    prev_answer_date = self.__negative_que_prev_answer_date(pro, cur_time)
+#             # Sample 50 (or less) pros among valid ones
+#             sampled_pros = random.sample(valid_pros, min(50, len(valid_pros)))
+            
+#             pros = []
+#             prev_answer_dates = []
+            
+#             # Compute previous answer date for every sampled professional
+#             for pro in sampled_pros:
+#                 if (que, pro) not in self.que_pro_set:
+#                     prev_answer_date = self.__negative_que_prev_answer_date(pro, cur_time)
                     
-                    pros.append(pro)
-                    prev_answer_dates.append(prev_answer_date)
+#                     pros.append(pro)
+#                     prev_answer_dates.append(prev_answer_date)
             
-            if len(pros) == 0:
-                continue
+#             if len(pros) == 0:
+#                 continue
             
-            # Substact prev answer dates from cur_time
-            distances = cur_time - np.array(prev_answer_dates)
+#             # Substact prev answer dates from cur_time
+#             distances = cur_time - np.array(prev_answer_dates)
             
-            # Apply log1p transformation to 1 / distances and normalize each entry
-            distances = np.log1p(1 / distances)
-            distances /= distances.sum()
+#             # Apply log1p transformation to 1 / distances and normalize each entry
+#             distances = np.log1p(1 / distances)
+#             distances /= distances.sum()
             
-            # Sample one professional from distribution of distances
-            pro = np.random.choice(pros, p=distances)            
+#             # Sample one professional from distribution of distances
+#             pro = np.random.choice(pros, p=distances)
+#             #-------------------------------------------------------------------------
+        
+            #-------------------------------------------------------------------------
+            #                         WITHOUT DISTRIBUTION
+
+            pro = random.choice(valid_pros)
+            while (que, pro) in self.que_pro_set:
+                pro = random.choice(valid_pros)
+            #-------------------------------------------------------------------------
             
             # Add que and pro data to all required lists
             prev_date = self.__negative_que_prev_answer_date(pro, cur_time)
@@ -197,13 +209,13 @@ class BatchGenerator(keras.utils.Sequence):
         
         pos_pro_stat = np.hstack([
             np.array(pos_pro_features),
-            np.array(pos_prev_dates)[:, np.newaxis],
+#             np.array(pos_prev_dates)[:, np.newaxis],
 #             np.array(pos_cur_times)[:, np.newaxis],
 #             pos_pro_embeddings,
         ])
         neg_pro_stat = np.hstack([
             np.array(neg_pro_features),
-            np.array(neg_prev_dates)[:, np.newaxis],
+#             np.array(neg_prev_dates)[:, np.newaxis],
 #             np.array(neg_cur_times)[:, np.newaxis],
 #             neg_pro_embeddings,
         ])
@@ -213,8 +225,8 @@ class BatchGenerator(keras.utils.Sequence):
         
         # TODO: change features to stat
         if self.return_stat:
-            return_list.append(np.vstack([pos_que_features, neg_que_features]))
-            return_list.append(np.vstack([pos_pro_features, neg_pro_features]))
+            return_list.append(np.vstack([pos_que_stat, neg_que_stat]))
+            return_list.append(np.vstack([pos_pro_stat, neg_pro_stat]))
         
         target = np.vstack([np.ones((self.pos_size, 1)), np.zeros((self.neg_size, 1))])
         

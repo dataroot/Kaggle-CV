@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from sklearn.utils import shuffle
 from tqdm import tqdm_notebook as tqdmn
 
-def permutation_importance(model, batch, y, fn, n_trials=1):
+def permutation_importance(model, batch, y, fn, n_trials=3):
     """
     Calculate model feature importance via random permutations of feature values
 
@@ -18,6 +18,7 @@ def permutation_importance(model, batch, y, fn, n_trials=1):
     :param n_trials: number of shuffles for each feature
     :return: Pandas DataFrame with importance of each feature
     """
+    print("Test")
     # model performance on normal, non-shuffled data
     base_loss, base_acc = model.evaluate(batch, y)
     
@@ -47,9 +48,9 @@ def permutation_importance(model, batch, y, fn, n_trials=1):
 
 
 def plot_fi(fi, fn, title='Feature importances via shuffle', xlabel='Change in loss after shuffling feature\'s values'):
-    '''
+    """
     Nicely plot Pandas DataFrame with feature importances
-    '''
+    """
     fi.loc[fi.index.isin(fn['que_emb']), 'color'] = 'b'
     fi.loc[fi.index.isin(fn['pro_emb']), 'color'] = 'r'
     fi.loc[fi.index.isin(fn['stat']), 'color'] = 'y'
@@ -61,12 +62,13 @@ def plot_fi(fi, fn, title='Feature importances via shuffle', xlabel='Change in l
 
 
 def vis_emb(model, layer, names, figsize, colors, title, s=None):
-    '''
+    """
     Visualize embeddings of a single feature
-    '''
-    emb = (model.get_layer(layer).get_weights()[0])
+    """
+    emb = model.get_layer(layer).get_weights()[0]
     fig, ax = plt.subplots(figsize=figsize)
     ax.scatter(emb[:, 0], emb[:, 1], c=colors, s=s)
     for i, name in enumerate(names):
         ax.annotate(name, (emb[i, 0], emb[i, 1]))
     plt.title(title)
+
