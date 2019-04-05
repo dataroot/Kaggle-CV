@@ -44,12 +44,14 @@ class Preprocessor(DatasetCreator):
         """
         # Preprocess datetime and timedelta features
         Preprocessor.datetime(self.qa_data, 'questions_date_added', hour=True)
-        Preprocessor.datetime(self.qa_data, 'professionals_last_answer_date', hour=True)
+        Preprocessor.datetime(self.qa_data, 'answers_date_added', hour=True)
+        Preprocessor.datetime(self.qa_data, 'professionals_prev_answer_date', hour=True)
         
         # Preprocess numerical features
         for feature in [
-            'questions_date_added_time', 'questions_date_added_doy_sin',
-            'professionals_last_answer_date_time', 'professionals_last_answer_date_dow',
+            'questions_date_added_time', 'questions_date_added_dow',
+            'answers_date_added_time', 'answers_date_added_dow',
+            'professionals_prev_answer_date_time', 'professionals_prev_answer_date_dow',
             'questions_body_length',
         ]:
             Preprocessor.numerical(self.qa_data, feature, self.pp)
