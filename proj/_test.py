@@ -8,13 +8,16 @@ def drive(data_path: str, dump_path: str):
     que = pd.read_csv(data_path + 'questions.csv')
     ans = pd.read_csv(data_path + 'answers.csv')
 
+    pd.set_option('display.width', 640)
+    pd.set_option('display.max_columns', 100)
+
     tag_que = pd.read_csv(data_path + 'tag_questions.csv')
     tags = pd.read_csv(data_path + 'tags.csv').merge(tag_que, left_on='tags_tag_id', right_on='tag_questions_tag_id')
 
-    # qp = QueProc()
+    qp = QueProc(oblige_fit=False, path=dump_path)
+    que_data = qp.transform(que, tags)
 
-    pd.set_option('display.width', 640)
-    pd.set_option('display.max_columns', 100)
+    print(que_data)
 
     sp = StuProc(oblige_fit=False, path=dump_path)
     stu_data = sp.transform(stu, que, ans)

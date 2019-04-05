@@ -18,7 +18,7 @@ class QueProc(BaseProc):
     def __init__(self, oblige_fit, path=''):
         super().__init__(oblige_fit, path)
 
-        with open('tags_embs.pkl', 'rb') as file:
+        with open(path + 'tags_embs.pkl', 'rb') as file:
             self.embs = pickle.load(file)
 
         self.features = {
@@ -37,10 +37,11 @@ class QueProc(BaseProc):
         tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))
 
         que['questions_date_added'] = pd.to_datetime(que['questions_date_added'])
+        que['questions_time'] = que['questions_date_added']
         que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
 
         tags_grouped = tags.groupby('tag_questions_question_id', as_index=False)[['tags_tag_name']] \
-            .aggregate([lambda x: ' '.join(x)])
+            .aggregate(lambda x: ' '.join(x))
         df = que.merge(tags_grouped, how='left', left_on='questions_id', right_on='tag_questions_question_id')
 
         # launch feature pre-processing
@@ -63,7 +64,8 @@ class QueProc(BaseProc):
         mean_embs = df['tags_tag_name'].apply(__convert)
 
         # re-order the columns
-        df = df[['questions_id' + 'questions_date_added'] + self.features['all']]
+        print(df.columns)
+        df = df[['questions_id', 'questions_time'] + self.features['all']]
 
         # append tag embeddings
         for i in range(emb_len):
