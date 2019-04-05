@@ -20,28 +20,31 @@ class BatchGenerator(keras.utils.Sequence):
         Number of both positive and negative pairs present in generated batch
         """
         self.batch_size = batch_size
-        self.pos_list = pos_pairs
-        self.nonneg_list = nonneg_pairs
 
-        self.pos_set = set(self.pos_list)
-        self.nonneg_set = set(self.nonneg_list)
+        self.pos_pairs = pos_pairs
+        self.nonneg_pairs = set(nonneg_pairs)
 
-        # lists of question and professionals ids
+        self.ques_stus = [(que, stu) for que, stu, pro in self.pos_pairs]
+        self.pros = [pro for que, stu, pro in self.pos_pairs]
 
-        self.ques = list(que['questions_id'])
-        self.pros = list(pro['professionals_id'])
-
-        # construct dicts mapping from entity id to its features
         que_ar = que.values
         self.que_feat = {que_ar[i, 0]: que_ar[i, 2:] for i in range(que_ar.shape[0])}
-        pro_ar = pro.values
-        self.pro_feat = {pro_ar[i, 0]: pro_ar[i, 2:] for i in range(pro_ar.shape[0])}
+        self.que_time = {que_ar[i, 0]: que_ar[i, 1] for i in range(que_ar.shape[0])}
+
+        self.pro_feat = {}
+        for pro_id, group in pro.groupby('professionals_id').groups():
+            group_ar = group.values()
+            self.pro_feat[pro_id] = [(group_ar[i, 0], group_ar[i, 1:]) for i in range(group_ar.shape[0])]
+
+        self.stu_feat = {}
+        for stu_id, group in stu.groupby('students_id').groups():
+            group_ar = group.values()
+            self.stu_feat[stu_id] = [(group_ar[i, 0], group_ar[i, 1:]) for i in range(group_ar.shape[0])]
 
     def __len__(self):
-        # number of unique batches which can be generated
-        return len(self.pairs_list) // self.batch_size
+        return len(self.pos_pairs) // self.batch_size
 
-    def __convert(self, pairs: list) -> (np.ndarray, np.ndarray):
+    def __convert(self, pairs: list, times: list) -> (np.ndarray, np.ndarray):
         """
         Convert list of pairs of ids to NumPy arrays
         of question and professionals features
@@ -56,27 +59,28 @@ class BatchGenerator(keras.utils.Sequence):
         """
         Generate the batch
         """
-        pos_pairs = self.pairs_list[self.batch_size * index: self.batch_size * (index + 1)]
+        pos_pairs = self.pos_pairs[self.batch_size * index: self.batch_size * (index + 1)]
+        pos_times = [self.que_time[que] for que, stu, pro in self.pos_pairs]
+
         neg_pairs = []
+        neg_times = []
 
         for i in range(len(pos_pairs)):
+            que, stu = random.choice(self.ques_stus)
             while True:
-                # sample negative pair candidate
-                que = random.choice(self.ques)
                 pro = random.choice(self.pros)
-                # check if it's not a positive pair
-                if (que, pro) not in self.pairs_set:
-                    neg_pairs.append((que, pro))
+                if (que, stu, pro) not in self.nonneg_pairs:
+                    neg_pairs.append((que, stu, pro))
+
+                    zero = self.que_time[que]
+
                     break
 
-        # convert lists of pairs to NumPy arrays of features
-        x_pos_que, x_pos_pro = self.__convert(pos_pairs)
-        x_neg_que, x_neg_pro = self.__convert(neg_pairs)
+        x_pos_que, x_pos_pro = self.__convert(pos_pairs, pos_times)
+        x_neg_que, x_neg_pro = self.__convert(neg_pairs, neg_times)
 
-        # return the data in its final form
         return [np.vstack([x_pos_que, x_neg_que]), np.vstack([x_pos_pro, x_neg_pro])], \
                np.vstack([np.ones((len(x_pos_que), 1)), np.zeros((len(x_neg_que), 1))])
 
     def on_epoch_end(self):
-        # shuffle positive pairs
-        self.pairs_list = random.sample(self.pairs_list, len(self.pairs_list))
+        self.pos_pairs = random.sample(self.pos_pairs, len(self.pos_pairs))

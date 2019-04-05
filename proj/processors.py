@@ -64,7 +64,6 @@ class QueProc(BaseProc):
         mean_embs = df['tags_tag_name'].apply(__convert)
 
         # re-order the columns
-        print(df.columns)
         df = df[['questions_id', 'questions_time'] + self.features['all']]
 
         # append tag embeddings
@@ -205,7 +204,7 @@ class ProProc(BaseProc):
 
         df = pro.merge(ans, left_on='professionals_id', right_on='answers_author_id') \
             .merge(que, left_on='answers_question_id', right_on='questions_id') \
-            .sort_values('professionals_date_joined')
+            .sort_values('answers_date_added')
         data = {}
 
         for i, row in tqdm(df.iterrows()):
@@ -214,15 +213,14 @@ class ProProc(BaseProc):
             if cur_pro not in data:
                 new = {'professionals_questions_answered': 0,
                        'professionals_previous_answer_date': row['professionals_date_joined']}
-                for feature in ['professionals_time', 'answers'
-                                                      'professionals_average_question_age',
+                for feature in ['professionals_time', 'professionals_average_question_age',
                                 'professionals_average_question_body_length',
                                 'professionals_average_answer_body_length']:
                     new[feature] = None
                 data[cur_pro] = [new]
 
             prv = data[cur_pro][-1]
-            new = {'professionals_time': row['questions_date_added'],
+            new = {'professionals_time': row['answers_date_added'],
                    'professionals_questions_answered': prv['professionals_questions_answered'] + 1,
                    'professionals_previous_answer_date': row['answers_date_added'],
                    'professionals_average_question_age': (row['answers_date_added'] - row[

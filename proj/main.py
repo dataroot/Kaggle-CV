@@ -28,7 +28,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
         print(var, train[var].shape, test[var].shape)
 
     tag_que = pd.read_csv(data_path + 'tag_questions.csv')
-    tags = pd.read_csv(data_path + 'tags.csv').merge(tag_que, left_on='tags_tag_id', sright_on='tag_questions_tag_id')
+    tags = pd.read_csv(data_path + 'tags.csv').merge(tag_que, left_on='tags_tag_id', right_on='tag_questions_tag_id')
 
     # pipeline_d2v(train['que'], train['ans'], train['pro'], tags, 10)
 
@@ -42,25 +42,30 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         df = data['que'].merge(data['ans'], left_on='questions_id', right_on='answers_question_id')
         if mode == 'Test':
-            df = df[df['answers_date_added'] >= split_date]
+            df = df.loc[df['answers_date_added'] >= split_date]
+        df = df[['questions_id', 'questions_author_id', 'answers_author_id']]
         pos_pairs = list(df.itertuples(index=False))
         nonneg_pairs += pos_pairs
 
         oblige_fit = (mode == 'Train')
 
-        qp = QueProc(oblige_fit, dump_path)
-        qt = qp.transform(data['que'], tags)
-        print('Questions: ', qt.shape)
+        que_proc = QueProc(oblige_fit, dump_path)
+        que_data = que_proc.transform(data['que'], tags)
+        print('Questions: ', que_data.shape)
 
-        sp = StuProc(oblige_fit, dump_path)
-        st = sp.transform(data['stu'], data['que'], data['ans'])
-        print('Students: ', qt.shape)
+        stu_proc = StuProc(oblige_fit, dump_path)
+        stu_data = stu_proc.transform(data['stu'], data['que'], data['ans'])
+        print('Students: ', stu_data.shape)
 
-        pp = ProProc(oblige_fit, dump_path)
-        pt = pp.transform(data['pro'], data['que'], data['ans'])
-        print('Professionals: ', pt.shape)
+        pro_proc = ProProc(oblige_fit, dump_path)
+        pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'])
+        print('Professionals: ', pro_data.shape)
 
-        bg = BatchGenerator(qt, sp, pt, 64, pos_pairs, nonneg_pairs)
+        print(que_data.columns, stu_data.columns, pro_data.columns)
+
+        raise NotImplementedError()
+
+        bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs)
 
         if mode == 'Train':
             model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
@@ -69,9 +74,9 @@ def drive(data_path: str, dump_path: str, split_date: str):
         else:
             print(model.evaluate_generator(bg))
 
-        bg = BatchGenerator(qt, sp, pt, 2048, pos_pairs, nonneg_pairs)
+        bg = BatchGenerator(que_data, stu_data, pro_data, 2048, pos_pairs, nonneg_pairs)
 
-        fn = {"que": list(qt.columns[2:]), "pro": list(pt.columns[2:]),
+        fn = {"que": list(que_data.columns[2:]), "pro": list(pro_data.columns[2:]),
               'text': [f'que_emb_{i}' for i in range(10)] + [f'pro_emb_{i}' for i in range(10)]}
 
         fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=5)
