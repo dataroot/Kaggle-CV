@@ -73,7 +73,11 @@ class BatchGenerator(keras.utils.Sequence):
                     neg_pairs.append((que, stu, pro))
 
                     zero = self.que_time[que]
-
+                    while True:
+                        shift = np.random.exponential(50) - 35
+                        if shift > 0:
+                            break
+                    neg_times.append(zero + np.timedelta64(shift, 'D'))
                     break
 
         x_pos_que, x_pos_pro = self.__convert(pos_pairs, pos_times)
