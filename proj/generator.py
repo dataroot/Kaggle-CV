@@ -11,7 +11,8 @@ class BatchGenerator(keras.utils.Sequence):
     in form of batches of NumPy arrays
     """
 
-    def __init__(self, que: pd.DataFrame, pro: pd.DataFrame, batch_size):
+    def __init__(self, que: pd.DataFrame, stu: pd.DataFrame, pro: pd.DataFrame,
+                 batch_size: int, pos_pairs: list, nonneg_pairs: list):
         """
         :param que: pre-processed questions data
         :param pro: pre-processed professionals data
@@ -19,20 +20,16 @@ class BatchGenerator(keras.utils.Sequence):
         Number of both positive and negative pairs present in generated batch
         """
         self.batch_size = batch_size
+        self.pos_list = pos_pairs
+        self.nonneg_list = nonneg_pairs
+
+        self.pos_set = set(self.pos_list)
+        self.nonneg_set = set(self.nonneg_list)
 
         # lists of question and professionals ids
+
         self.ques = list(que['questions_id'])
         self.pros = list(pro['professionals_id'])
-
-        # sets of question-professional pairs achieved from question and professionals data
-        que_pairs = {(row['questions_id'], author) for i, row in que.iterrows()
-                     for author in str(row['answers_author_id']).split()}
-        pro_pairs = {(question, row['professionals_id']) for i, row in pro.iterrows()
-                     for question in str(row['answers_question_id']).split()}
-
-        # actual set of pairs is the intersection
-        self.pairs_set = que_pairs & pro_pairs
-        self.pairs_list = list(self.pairs_set)
 
         # construct dicts mapping from entity id to its features
         que_ar = que.values

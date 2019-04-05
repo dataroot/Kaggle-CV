@@ -40,7 +40,7 @@ class QueProc(BaseProc):
         que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
 
         tags_grouped = tags.groupby('tag_questions_question_id', as_index=False)[['tags_tag_name']] \
-            .aggregate(lambda x: ' '.join(x))
+            .aggregate([lambda x: ' '.join(x)])
         df = que.merge(tags_grouped, how='left', left_on='questions_id', right_on='tag_questions_question_id')
 
         # launch feature pre-processing
@@ -63,7 +63,7 @@ class QueProc(BaseProc):
         mean_embs = df['tags_tag_name'].apply(__convert)
 
         # re-order the columns
-        df = df[['questions_id'] + self.features['all']]
+        df = df[['questions_id' + 'questions_date_added'] + self.features['all']]
 
         # append tag embeddings
         for i in range(emb_len):
@@ -94,6 +94,8 @@ class StuProc(BaseProc):
             'date': ['students_date_joined', 'students_previous_question_time']
         }
 
+        self._unroll_features()
+
     def transform(self, stu, que, ans) -> pd.DataFrame:
         stu['students_state'] = stu['students_location'].apply(lambda s: str(s).split(', ')[-1])
 
@@ -116,14 +118,14 @@ class StuProc(BaseProc):
             if cur_stu not in data:
                 new = {'students_questions_asked': 0,
                        'students_previous_question_time': row['students_date_joined']}
-                for feature in ['questions_id', 'students_average_question_age',
+                for feature in ['students_time', 'students_average_question_age',
                                 'students_average_question_body_length',
                                 'students_average_answer_body_length', 'students_average_answer_amount']:
                     new[feature] = None
                 data[cur_stu] = [new]
 
             prv = data[cur_stu][-1]
-            new = {'questions_id': row['questions_id'],
+            new = {'students_time': row['questions_date_added'],
                    'students_questions_asked': prv['students_questions_asked'] + 1,
                    'students_previous_question_time': row['questions_date_added']}
             if row['questions_id'] in ans_grouped.groups:
@@ -152,12 +154,12 @@ class StuProc(BaseProc):
             data[cur_stu].append(new)
 
         df = pd.DataFrame([{**f, **{'students_id': id}} for (id, fs) in data.items() for f in fs])
-        df['questions_id'] = df['questions_id'].shift(-1)
+        df['students_time'] = df['students_time'].shift(-1)
 
         df = df.merge(stu, on='students_id')
         self.preprocess(df)
 
-        df = df[['students_id', 'questions_id'] + self.features['all']]
+        df = df[['students_id', 'students_time'] + self.features['all']]
 
         return df
 
@@ -210,14 +212,15 @@ class ProProc(BaseProc):
             if cur_pro not in data:
                 new = {'professionals_questions_answered': 0,
                        'professionals_previous_answer_date': row['professionals_date_joined']}
-                for feature in ['questions_id', 'professionals_average_question_age',
+                for feature in ['professionals_time', 'answers'
+                                                      'professionals_average_question_age',
                                 'professionals_average_question_body_length',
                                 'professionals_average_answer_body_length']:
                     new[feature] = None
                 data[cur_pro] = [new]
 
             prv = data[cur_pro][-1]
-            new = {'questions_id': row['questions_id'],
+            new = {'professionals_time': row['questions_date_added'],
                    'professionals_questions_answered': prv['professionals_questions_answered'] + 1,
                    'professionals_previous_answer_date': row['answers_date_added'],
                    'professionals_average_question_age': (row['answers_date_added'] - row[
@@ -232,7 +235,7 @@ class ProProc(BaseProc):
             data[cur_pro].append(new)
 
         df = pd.DataFrame([{**f, **{'professionals_id': id}} for (id, fs) in data.items() for f in fs])
-        df['questions_id'].shift(-1)
+        df['professionals_time'] = df['professionals_time'].shift(-1)
 
         df = df.merge(pro, on='professionals_id')
         self.preprocess(df)
@@ -240,9 +243,8 @@ class ProProc(BaseProc):
         emb_len = list(self.embs.values())[0].shape[0]
         embs = df['professionals_industry_processed'].apply(lambda x: self.embs.get(x, np.zeros(emb_len)))
 
-        df = df[['professionals_id', 'questions_id'] + self.features['all']]
+        df = df[['professionals_id', 'professionals_time'] + self.features['all']]
 
-        # append averaged tag embeddings
         for i in range(emb_len):
             df[f'pro_emb_{i}'] = embs.apply(lambda x: x[i])
 

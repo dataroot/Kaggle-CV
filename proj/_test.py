@@ -1,5 +1,5 @@
 import pandas as pd
-from processing import StuProc, ProProc
+from processors import QueProc, StuProc, ProProc
 
 
 def drive(data_path: str, dump_path: str):
@@ -8,16 +8,23 @@ def drive(data_path: str, dump_path: str):
     que = pd.read_csv(data_path + 'questions.csv')
     ans = pd.read_csv(data_path + 'answers.csv')
 
-    # sp = StuProc(oblige_fit=False, path=dump_path)
-    # transformed = sp.transform(stu, que, ans)
+    tag_que = pd.read_csv(data_path + 'tag_questions.csv')
+    tags = pd.read_csv(data_path + 'tags.csv').merge(tag_que, left_on='tags_tag_id', right_on='tag_questions_tag_id')
 
-    pp = ProProc(oblige_fit=False, path=dump_path)
-    transformed = pp.transform(pro, que, ans)
+    # qp = QueProc()
 
     pd.set_option('display.width', 640)
+    pd.set_option('display.max_columns', 100)
 
-    with pd.option_context('display.max_columns', 100):
-        print(transformed)
+    sp = StuProc(oblige_fit=False, path=dump_path)
+    stu_data = sp.transform(stu, que, ans)
+
+    print(stu_data)
+
+    pp = ProProc(oblige_fit=False, path=dump_path)
+    pro_data = pp.transform(pro, que, ans)
+
+    print(pro_data)
 
 
 if __name__ == '__main__':
