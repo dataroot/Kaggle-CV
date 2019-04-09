@@ -29,6 +29,7 @@ class QueProc(BaseProc):
             },
             'date': ['questions_date_added']
         }
+
         self._unroll_features()
 
     # TODO: add number of tags feature
@@ -155,7 +156,7 @@ class StuProc(BaseProc):
             data[cur_stu].append(new)
 
         df = pd.DataFrame([{**f, **{'students_id': id}} for (id, fs) in data.items() for f in fs])
-        df['students_time'] = df['students_time'].shift(-1)
+        # df['students_time'] = df['students_time'].shift(-1)
 
         df = df.merge(stu, on='students_id')
         self.preprocess(df)
@@ -235,7 +236,7 @@ class ProProc(BaseProc):
             data[cur_pro].append(new)
 
         df = pd.DataFrame([{**f, **{'professionals_id': id}} for (id, fs) in data.items() for f in fs])
-        df['professionals_time'] = df['professionals_time'].shift(-1)
+        # df['professionals_time'] = df['professionals_time'].shift(-1)
 
         df = df.merge(pro, on='professionals_id')
         self.preprocess(df)

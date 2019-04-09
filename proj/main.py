@@ -1,5 +1,3 @@
-from pprint import pprint
-
 import pandas as pd
 from keras.optimizers import Adam
 
@@ -31,12 +29,16 @@ def drive(data_path: str, dump_path: str, split_date: str):
     tags = pd.read_csv(data_path + 'tags.csv').merge(tag_que, left_on='tags_tag_id', right_on='tag_questions_tag_id')
 
     # pipeline_d2v(train['que'], train['ans'], train['pro'], tags, 10)
-
-    model = Mothership(que_dim=30, que_input_embs=[102, 42], que_output_embs=[2, 2],
-                       pro_dim=25, pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
+    '''
+    model = Mothership(que_dim=10, que_input_embs=[], que_output_embs=[],
+                       pro_dim=10, pro_input_embs=[], pro_output_embs=[], inter_dim=10)
+    '''
+    model = Mothership(que_dim=30, que_input_embs=[102, 42], que_output_embs=[1, 1],
+                       pro_dim=25, pro_input_embs=[102, 102, 42], pro_output_embs=[1, 1, 1], inter_dim=10)
+    # '''
+    print(model.summary())
 
     nonneg_pairs = []
-
     for mode, data in [('Train', train), ('Test', test)]:
         print(mode)
 
@@ -63,7 +65,10 @@ def drive(data_path: str, dump_path: str, split_date: str):
         pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'])
         print('Professionals: ', pro_data.shape)
 
-        print(que_data.columns, stu_data.columns, pro_data.columns)
+        with pd.option_context('display.max_columns', 100, 'display.width', 640):
+            print(que_data)
+            print(stu_data)
+            print(pro_data)
 
         bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs)
 
@@ -74,7 +79,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
         else:
             print(model.evaluate_generator(bg))
 
-        bg = BatchGenerator(que_data, stu_data, pro_data, 2048, pos_pairs, nonneg_pairs)
+        bg = BatchGenerator(que_data, stu_data, pro_data, 1024, pos_pairs, nonneg_pairs)
 
         fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]), "pro": list(pro_data.columns[2:]),
               'text': [f'que_emb_{i}' for i in range(10)] + [f'pro_emb_{i}' for i in range(10)]}

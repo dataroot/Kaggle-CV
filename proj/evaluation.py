@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from jupyterthemes import jtplot
+from tqdm import tqdm
 
 from sklearn.utils import shuffle
 import keras
@@ -27,7 +28,7 @@ def permutation_importance(model: keras.models.Model, x_que: np.ndarray, x_pro: 
     # model performance on normal, non-shuffled data
     base_loss, base_acc = model.evaluate([x_que, x_pro], y)
     losses = []
-    for i, name in enumerate(fn['que'] + fn['pro']):
+    for i, name in enumerate(tqdm(fn['que'] + fn['pro'])):
         loss = 0
         for j in range(n_trials):
             x_que_i, x_pro_i = copy.deepcopy(x_que), copy.deepcopy(x_pro)
