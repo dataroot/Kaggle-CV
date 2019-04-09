@@ -1,29 +1,106 @@
 import tensorflow as tf
 from keras.models import Model
 from keras.layers import Input, Dense, Lambda, Embedding, Concatenate
-from keras import backend as K
 
 
-class Encoder(Model):
-    def __init__(self, input_dim: int, output_dim: int, emb_input_dims: list, emb_output_dims: list):
-        inputs = Input((input_dim, ))
-        n_embs = len(emb_input_dims)
+def Encoder(x, input_dim: int, middle_dim: int, output_dim: int, emb_input_dims: list, emb_output_dims: list):
+    """
+   Computes latent space representation of x
+    """
+    n_embs = len(emb_input_dims)
+    
+    if n_embs > 0:
+        embs = []
         
-        if n_embs > 0:
-            embs = []
-            for i, nunique, dim in zip(range(n_embs), emb_input_dims, emb_output_dims):
-                tmp = Lambda(lambda x: x[:, i])(inputs)
-                embs.append(Embedding(nunique, dim)(tmp))
-            embs.append(Lambda(lambda x: x[:, n_embs:])(inputs))
-            self.inter = Concatenate()(embs)
-        else:
-            self.inter = inputs
+        for i, nunique, dim in zip(range(n_embs), emb_input_dims, emb_output_dims):
+            tmp = Lambda(lambda x: x[:, i])(x)
+            embs.append(Embedding(nunique, dim)(tmp))
         
-        x = self.inter
-#         x = Dense(15, activation='tanh')(x)
+        embs.append(Lambda(lambda x: x[:, n_embs:])(x))
+        x = Concatenate()(embs)
+    
+    x = Dense(middle_dim, activation='tanh')(x)
+    x = Dense(output_dim)(x)
+    return x
+
+
+class ContentModel(Model):
+    """
+    The model with Encoder-based architecture
+    """
+    
+    def __init__(self,
+                 que_dim: int, que_sep: int, que_input_embs: list, que_output_embs: list,
+                 pro_dim: int, pro_sep: int, pro_input_embs: list, pro_output_embs: list,
+                 middle_dim: int, latent_dim: int):
+        super().__init__()
         
-        outputs = Dense(output_dim)(x)
-        super().__init__(inputs, outputs)
+        que_inputs = Input((que_dim, ))
+        pro_inputs = Input((pro_dim, ))
+        
+        que_features = Lambda(lambda x: x[:, :que_sep])(que_inputs)
+        pro_features = Lambda(lambda x: x[:, :pro_sep])(pro_inputs)
+        
+        que_encoded = Encoder(que_features, que_sep, middle_dim, latent_dim, que_input_embs, que_output_embs)
+        pro_encoded = Encoder(pro_features, pro_sep, middle_dim, latent_dim, pro_input_embs, pro_output_embs)
+        
+        dist = Lambda(lambda x: tf.reduce_sum(tf.square(x[0]-x[1]), axis = -1)) \
+            ([que_encoded, pro_encoded])
+        
+        outputs = Lambda(lambda x: tf.reshape(tf.exp(-x), (-1, 1)))(dist)
+        
+        super().__init__([que_inputs, pro_inputs], outputs)
+
+
+class TimeModel(Model):
+    """
+    The model with Encoder-based architecture
+    """
+    
+    def __init__(self, que_dim: int, que_sep: int, pro_dim: int, pro_sep: int, middle_dim: int, latent_dim: int):
+        super().__init__()
+        
+        que_inputs = Input((que_dim, ))
+        pro_inputs = Input((pro_dim, ))
+        
+        que_features = Lambda(lambda x: x[:, que_sep:])(que_inputs)
+        pro_features = Lambda(lambda x: x[:, pro_sep:])(pro_inputs)
+        
+        que_encoded = Encoder(que_features, que_dim - que_sep, middle_dim, latent_dim, [], [])
+        pro_encoded = Encoder(pro_features, pro_dim - pro_sep, middle_dim, latent_dim, [], [])
+        
+        dist = Lambda(lambda x: tf.reduce_sum(tf.square(x[0]-x[1]), axis = -1)) \
+            ([que_encoded, pro_encoded])
+        
+        outputs = Lambda(lambda x: tf.reshape(tf.exp(-x), (-1, 1)))(dist)
+        
+        super().__init__([que_inputs, pro_inputs], outputs)
+
+
+# class SingleModel(Model):
+#     """
+#     The model with Encoder-based architecture
+#     """
+    
+#     def __init__(self, content_model, time_model, que_dim: int, pro_dim: int, batch_size: int = 128):
+#         super().__init__()
+        
+#         que_inputs = Input((que_dim, ))
+#         pro_inputs = Input((pro_dim, ))
+# #         que_inputs = Input(batch_shape=(batch_size, que_dim))
+# #         pro_inputs = Input(batch_shape=(batch_size, pro_dim))
+        
+#         # Possibly without predict
+#         content_model.inputs = [que_inputs, pro_inputs]
+#         content_score = content_model.outputs[0]
+        
+#         time_model.inputs = [que_inputs, pro_inputs]
+#         time_score = time_model.outputs[0]
+        
+#         # Compute F1 score
+#         outputs = 2 * content_score * time_score / (content_score + time_score)
+        
+#         super().__init__([que_inputs, pro_inputs], outputs)
 
 
 class Categorizer(Model):
@@ -42,28 +119,6 @@ class Categorizer(Model):
             outputs = inputs
         
         super().__init__(inputs, outputs)
-
-
-class Mothership_v1(Model):
-    """
-    The model with Encoder-based architecture
-    """
-    
-    def __init__(self,
-                 que_dim: int, que_input_embs: list, que_output_embs: list,
-                 pro_dim: int, pro_input_embs: list, pro_output_embs: list,
-                 inter_dim: int = 10):
-        super().__init__()
-        
-        self.que_model = Encoder(que_dim, inter_dim, que_input_embs, que_output_embs)
-        self.pro_model = Encoder(pro_dim, inter_dim, pro_input_embs, pro_output_embs)
-        
-        self.merged = Lambda(lambda x: tf.reduce_sum(tf.square(x[0]-x[1]), axis = -1)) \
-            ([self.que_model.outputs[0], self.pro_model.outputs[0]])
-        
-        outputs = Lambda(lambda x: tf.reshape(tf.exp(-self.merged), (-1, 1)))(self.merged)
-        
-        super().__init__([self.que_model.inputs[0], self.pro_model.inputs[0]], outputs)
 
 
 class Mothership_v2(Model):
@@ -139,13 +194,37 @@ class Mothership_v4(Model):
         que_stat_inputs = Input((que_stat_dim, ))
         pro_stat_inputs = Input((pro_stat_dim, ))
         
-        self.que_stat = Categorizer(que_stat_dim, que_input_embs, que_output_embs)(que_stat_inputs)
-        self.pro_stat = Categorizer(pro_stat_dim, pro_input_embs, pro_output_embs)(pro_stat_inputs)
+#         self.que_stat = Categorizer(que_stat_dim, que_input_embs, que_output_embs)(que_stat_inputs)
+#         self.pro_stat = Categorizer(pro_stat_dim, pro_input_embs, pro_output_embs)(pro_stat_inputs)
+        
+        n_embs = len(que_input_embs)
+        if n_embs > 0:
+            embs = []
+            for i, nunique, dim in zip(range(n_embs), que_input_embs, que_output_embs):
+                tmp = Lambda(lambda x: x[:, i])(que_stat_inputs)
+                embs.append(Embedding(nunique, dim)(tmp))
+            embs.append(Lambda(lambda x: x[:, n_embs:])(que_stat_inputs))
+            outputs = Concatenate()(embs)
+        else:
+            outputs = que_stat_inputs
+        self.que_stat = outputs
+        
+        n_embs = len(pro_input_embs)
+        if n_embs > 0:
+            embs = []
+            for i, nunique, dim in zip(range(n_embs), pro_input_embs, pro_output_embs):
+                tmp = Lambda(lambda x: x[:, i])(pro_stat_inputs)
+                embs.append(Embedding(nunique, dim)(tmp))
+            embs.append(Lambda(lambda x: x[:, n_embs:])(pro_stat_inputs))
+            outputs = Concatenate()(embs)
+        else:
+            outputs = pro_stat_inputs
+        self.pro_stat = outputs
         
         x = Concatenate()([que_emb_inputs, pro_emb_inputs, self.que_stat, self.pro_stat])
         
-        x = Dense(30, activation='tanh')(x)
-        x = Dense(15, activation='tanh')(x)
+        x = Dense(40, activation='tanh')(x)
+        x = Dense(20, activation='tanh')(x)
         
         outputs = Dense(1, activation='sigmoid')(x)
         
