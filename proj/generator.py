@@ -75,7 +75,8 @@ class BatchGenerator(keras.utils.Sequence):
 
     @staticmethod
     def __find(feat_ar: np.ndarray, time_ar: np.ndarray, search_time):
-        pos = np.searchsorted(time_ar[1:], search_time) - 1
+        pos = np.searchsorted(time_ar[1:], search_time)
+        assert time_ar[pos] is pd.NaT or time_ar[pos] < search_time
         return feat_ar[pos]
 
     def __convert(self, pairs: list) -> (np.ndarray, np.ndarray):
