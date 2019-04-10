@@ -1,6 +1,6 @@
 import tensorflow as tf
 from keras.models import Model
-from keras.layers import Input, Dense, Lambda, Embedding, Concatenate
+from keras.layers import Input, Dense, Lambda, Embedding, Concatenate, Reshape
 
 
 def Encoder(x, input_dim: int, middle_dim: int, output_dim: int, emb_input_dims: list, emb_output_dims: list):
@@ -77,30 +77,41 @@ class TimeModel(Model):
         super().__init__([que_inputs, pro_inputs], outputs)
 
 
-# class SingleModel(Model):
-#     """
-#     The model with Encoder-based architecture
-#     """
+class DoubleModel(Model):
+    """
+    The model with Encoder-based architecture
+    """
     
-#     def __init__(self, content_model, time_model, que_dim: int, pro_dim: int, batch_size: int = 128):
-#         super().__init__()
+    def __init__(self,
+                 que_dim: int, que_sep: int, que_input_embs: list, que_output_embs: list,
+                 pro_dim: int, pro_sep: int, pro_input_embs: list, pro_output_embs: list,
+                 content_middle_dim: int, content_latent_dim: int,
+                 time_middle_dim: int, time_latent_dim: int):
+        super().__init__()
         
-#         que_inputs = Input((que_dim, ))
-#         pro_inputs = Input((pro_dim, ))
-# #         que_inputs = Input(batch_shape=(batch_size, que_dim))
-# #         pro_inputs = Input(batch_shape=(batch_size, pro_dim))
+        que_inputs = Input((que_dim, ))
+        pro_inputs = Input((pro_dim, ))
         
-#         # Possibly without predict
-#         content_model.inputs = [que_inputs, pro_inputs]
-#         content_score = content_model.outputs[0]
+        self.content_model = ContentModel(
+            que_dim, que_sep, que_input_embs, que_output_embs,
+            pro_dim, pro_sep, pro_input_embs, pro_output_embs,
+            content_middle_dim, content_latent_dim
+        )
+        self.time_model = TimeModel(que_dim, que_sep, pro_dim, pro_sep, time_middle_dim, time_latent_dim)
         
-#         time_model.inputs = [que_inputs, pro_inputs]
-#         time_score = time_model.outputs[0]
+        content_score = self.content_model([que_inputs, pro_inputs])
+        time_score = self.time_model([que_inputs, pro_inputs])
         
-#         # Compute F1 score
-#         outputs = 2 * content_score * time_score / (content_score + time_score)
+        score = Concatenate()([content_score, time_score])
         
-#         super().__init__([que_inputs, pro_inputs], outputs)
+        # Compute F1 score
+        F1_score = Lambda(lambda x: (x[:, 0] + x[:, 1]) / 2)(score)
+        F1_score = Reshape((1, ))(F1_score)
+        
+        super().__init__([que_inputs, pro_inputs], F1_score)
+
+
+#---------------------------------------------------------------------------------------------------------
 
 
 class Categorizer(Model):

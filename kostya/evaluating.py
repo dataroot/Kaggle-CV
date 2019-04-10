@@ -7,7 +7,7 @@ from sklearn.utils import shuffle
 from tqdm import tqdm_notebook as tqdmn
 
 
-def permutation_importance(is_content_related: bool, model, batch, y, fn, que_sep: int, pro_sep: int, n_trials: int = 3):
+def permutation_importance(is_double: bool, is_content_related: bool, model, batch, y, fn, que_sep: int, pro_sep: int, n_trials: int = 3):
     """
     Calculate model feature importance via random permutations of feature values
 
@@ -24,7 +24,7 @@ def permutation_importance(is_content_related: bool, model, batch, y, fn, que_se
     
     que_inputs, pro_inputs = batch
     
-    if is_content_related:
+    if is_content_related or is_double:
         que_offset, pro_offset = 0, 0
     else:
         que_offset, pro_offset = que_sep, pro_sep
