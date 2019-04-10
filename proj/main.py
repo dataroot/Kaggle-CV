@@ -84,9 +84,9 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         if mode == 'Train':
             # in train mode, build, compile train and save model
-            model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2 + 1,
+            model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2 + 1, ## 4-id,time; 1-currenttime
                                que_input_embs=[102, 42], que_output_embs=[2, 2],
-                               pro_dim=len(pro_data.columns) - 2 + 1,
+                               pro_dim=len(pro_data.columns) - 2 + 1, ## 2-id,time; 1-currenttime
                                pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
             model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
             model.fit_generator(bg, epochs=10, verbose=2)
