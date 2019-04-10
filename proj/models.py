@@ -3,57 +3,6 @@ from keras.models import Model
 from keras.layers import Input, Dense, Lambda, Embedding, Concatenate
 from keras.regularizers import l2
 
-
-# '''
-class Mothership(Model):
-    def __init__(self, que_dim: int, que_input_embs: list, que_output_embs: list,
-                 pro_dim: int, pro_input_embs: list, pro_output_embs: list, inter_dim: int):
-
-        # questions encoder
-
-        que_inputs = Input((que_dim,))
-        n_embs = len(que_input_embs)
-
-        if n_embs > 0:
-            embs = []
-
-            for i, nunique, dim in zip(range(n_embs), que_input_embs, que_output_embs):
-                tmp = Lambda(lambda x: x[:, i])(que_inputs)
-                embs.append(Embedding(nunique, dim)(tmp))
-
-            embs.append(Lambda(lambda x: x[:, n_embs:])(que_inputs))
-            self.inter = Concatenate()(embs)
-        else:
-            self.inter = que_inputs
-        que_outputs = Dense(inter_dim, kernel_regularizer=l2(0.1))(self.inter)
-
-        # professionals encoder
-
-        pro_inputs = Input((pro_dim,))
-        n_embs = len(pro_input_embs)
-
-        if n_embs > 0:
-            embs = []
-
-            for i, nunique, dim in zip(range(n_embs), pro_input_embs, pro_output_embs):
-                tmp = Lambda(lambda x: x[:, i])(pro_inputs)
-                embs.append(Embedding(nunique, dim)(tmp))
-
-            embs.append(Lambda(lambda x: x[:, n_embs:])(pro_inputs))
-            self.inter = Concatenate()(embs)
-        else:
-            self.inter = pro_inputs
-        pro_outputs = Dense(inter_dim, kernel_regularizer=l2(0.1))(self.inter)
-
-        # aftermath
-
-        self.merged = Lambda(lambda x: tf.reduce_sum(tf.square(x[0] - x[1]), axis=-1))(
-            [que_outputs, pro_outputs])
-        outputs = Lambda(lambda x: tf.reshape(tf.exp(-self.merged), (-1, 1)))(self.merged)
-
-        super().__init__([que_inputs, pro_inputs], outputs)
-
-
 '''
 class Encoder(Model):
     """
@@ -115,3 +64,53 @@ class Mothership(Model):
 
         super().__init__([self.que_model.inputs[0], self.pro_model.inputs[0]], outputs)
 '''
+
+
+# simplified version of Mothership class above. For additional comments, take a look above
+class Mothership(Model):
+    def __init__(self, que_dim: int, que_input_embs: list, que_output_embs: list,
+                 pro_dim: int, pro_input_embs: list, pro_output_embs: list, inter_dim: int):
+
+        # questions encoder
+
+        que_inputs = Input((que_dim,))
+        n_embs = len(que_input_embs)
+
+        if n_embs > 0:
+            embs = []
+
+            for i, nunique, dim in zip(range(n_embs), que_input_embs, que_output_embs):
+                tmp = Lambda(lambda x: x[:, i])(que_inputs)
+                embs.append(Embedding(nunique, dim)(tmp))
+
+            embs.append(Lambda(lambda x: x[:, n_embs:])(que_inputs))
+            self.inter = Concatenate()(embs)
+        else:
+            self.inter = que_inputs
+        que_outputs = Dense(inter_dim, kernel_regularizer=l2(0.01))(self.inter)
+
+        # professionals encoder
+
+        pro_inputs = Input((pro_dim,))
+        n_embs = len(pro_input_embs)
+
+        if n_embs > 0:
+            embs = []
+
+            for i, nunique, dim in zip(range(n_embs), pro_input_embs, pro_output_embs):
+                tmp = Lambda(lambda x: x[:, i])(pro_inputs)
+                embs.append(Embedding(nunique, dim)(tmp))
+
+            embs.append(Lambda(lambda x: x[:, n_embs:])(pro_inputs))
+            self.inter = Concatenate()(embs)
+        else:
+            self.inter = pro_inputs
+        pro_outputs = Dense(inter_dim, kernel_regularizer=l2(0.01))(self.inter)
+
+        # aftermath
+
+        self.merged = Lambda(lambda x: tf.reduce_sum(tf.square(x[0] - x[1]), axis=-1))(
+            [que_outputs, pro_outputs])
+        outputs = Lambda(lambda x: tf.reshape(tf.exp(-self.merged), (-1, 1)))(self.merged)
+
+        super().__init__([que_inputs, pro_inputs], outputs)

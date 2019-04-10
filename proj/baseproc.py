@@ -50,24 +50,19 @@ class BaseProc(ABC):
         self.features['all'] = [name for name, deg in self.features['categorical']] + \
                                self.features['numerical']['zero'] + self.features['numerical']['mean'] + \
                                [f + p for f in self.features['date']
-                                for p in ['_time', '_doy_sin', '_doy_cos', '_dow']]
+                                for p in ['_time', '_doy_sin', '_doy_cos']]
 
-    def datetime(self, df: pd.DataFrame, feature: str, hour: bool = False):
+    def datetime(self, df: pd.DataFrame, feature: str):
         """
         Generates a bunch of new datetime features and drops the original feature inplace
 
         :param df: data to work with
         :param feature: name of a column in df that contains date
-        :param hour: whether feature contains time
         """
         # iterate over suffix of generated features and function to calculate it
-        for suf, fun in [('_time', lambda d: d.year + (d.dayofyear + (d.hour / 24 if hour else 0)) / 365),
+        for suf, fun in [('_time', lambda d: d.year + (d.dayofyear + d.hour / 24) / 365),
                          ('_doy_sin', lambda d: np.sin(2 * np.pi * d.dayofyear / 365)),
-                         ('_doy_cos', lambda d: np.cos(2 * np.pi * d.dayofyear / 365)),
-                         ('_dow', lambda d: d.weekday())] + \
-                        ([('_hour_sin', lambda d: np.sin(2 * np.pi * (d.hour + d.minute / 60) / 24)),
-                          ('_hour_cos', lambda d: np.cos(2 * np.pi * (d.hour + d.minute / 60) / 24))]
-                        if hour else []):
+                         ('_doy_cos', lambda d: np.cos(2 * np.pi * d.dayofyear / 365))]:
             df[feature + suf] = df[feature].apply(fun)
             # add created feature to the list of generated features
             self.features['gen'].append(feature + suf)
@@ -150,7 +145,7 @@ class BaseProc(ABC):
         # preprocess all date features
         self.features['gen'] = []
         for feature in self.features['date']:
-            self.datetime(df, feature, hour=False)
+            self.datetime(df, feature)
 
         # preprocess all numerical features, including generated features from dates
         for fillmode in self.features['numerical']:

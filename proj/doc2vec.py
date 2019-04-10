@@ -56,7 +56,7 @@ def vis(d2v: Doc2Vec):
     plt.show()
 
 
-def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.DataFrame, dim: int):
+def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.DataFrame, dim: int, path: str):
     """
     Pipeline for training and saving to drive embeddings for
     professional's industries and question's tags via doc2vec algorithm
@@ -72,7 +72,7 @@ def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.D
                 'tags_tag_name', 'professionals_industry', 'professionals_headline']
 
     # pre-process all textual columns in data
-    tp = TextProcessor()
+    tp = TextProcessor(path)
     for df, column in zip([que, que, ans, tags, pro, pro], features):
         df[column] = df[column].apply(tp.process, allow_stopwords=(column == 'tags_tag_name'))
 
@@ -83,7 +83,7 @@ def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.D
 
     # train and save question's tags embeddings
     d2v = train(df, 'tags_tag_name', features, dim)
-    save(d2v, 'dump/tags')
+    save(d2v, path + 'tags')
 
     # aggregate all the tags in one string for same questions
     que_tags = que_tags[['questions_id', 'tags_tag_name']].groupby(by='questions_id', as_index=False) \
@@ -96,4 +96,4 @@ def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.D
 
     # train and save professional's industries embeddings
     d2v = train(df, 'professionals_industry', features, dim)
-    save(d2v, 'dump/industries')
+    save(d2v, path + 'industries')

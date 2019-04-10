@@ -7,8 +7,10 @@ from baseproc import BaseProc
 
 from tqdm import tqdm
 
+pd.options.mode.chained_assignment = None  # warning suppression
 
-# TODO: add regular expressions somewhere
+
+# TODO: add regular expressions for HTML tags removal somewhere
 
 class QueProc(BaseProc):
     """
@@ -27,7 +29,7 @@ class QueProc(BaseProc):
                 'zero': ['questions_body_length'],
                 'mean': []
             },
-            'date': ['questions_date_added']
+            'date': []  # ['questions_date_added']
         }
 
         self._unroll_features()
@@ -37,16 +39,15 @@ class QueProc(BaseProc):
     def transform(self, que, tags):
         tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))
 
-        que['questions_date_added'] = pd.to_datetime(que['questions_date_added'])
         que['questions_time'] = que['questions_date_added']
         que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
 
+        # append aggregated tags to each question
         tags_grouped = tags.groupby('tag_questions_question_id', as_index=False)[['tags_tag_name']] \
             .aggregate(lambda x: ' '.join(x))
         df = que.merge(tags_grouped, how='left', left_on='questions_id', right_on='tag_questions_question_id')
 
         # launch feature pre-processing
-
         self.preprocess(df)
 
         # prepare tag embeddings
@@ -74,7 +75,6 @@ class QueProc(BaseProc):
         return df
 
 
-# TODO: standardize after filling NaNs
 # TODO: consider question_body_length even if answers are absent
 # TODO: compute feature for students with no questions and professionals with no answers also
 
@@ -93,7 +93,7 @@ class StuProc(BaseProc):
                 'mean': ['students_average_question_age', 'students_average_question_body_length',
                          'students_average_answer_body_length', 'students_average_answer_amount']
             },
-            'date': ['students_date_joined', 'students_previous_question_time']
+            'date': []  # ['students_date_joined', 'students_previous_question_time']
         }
 
         self._unroll_features()
@@ -104,19 +104,17 @@ class StuProc(BaseProc):
         que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
         ans['answers_body_length'] = ans['answers_body'].apply(lambda s: len(str(s)))
 
-        for df, feature in [(stu, 'students_date_joined'),
-                            (que, 'questions_date_added'), (ans, 'answers_date_added')]:
-            df[feature] = pd.to_datetime(df[feature])
-
+        # prepare all the dataframes needed for iteration
         ans_grouped = ans.groupby('answers_question_id')
         df = stu.merge(que, left_on='students_id', right_on='questions_author_id') \
             .sort_values('questions_date_added')
         data = {}
         ans_cnt = 0
 
-        for i, row in tqdm(df.iterrows()):
+        for i, row in tqdm(df.iterrows(), desc="Students features"):
             cur_stu = row['students_id']
 
+            # default case, student's feature values before he left any questions
             if cur_stu not in data:
                 new = {'students_questions_asked': 0,
                        'students_previous_question_time': row['students_date_joined']}
@@ -127,10 +125,14 @@ class StuProc(BaseProc):
                 data[cur_stu] = [new]
 
             prv = data[cur_stu][-1]
+
+            # features with simple update rules
             new = {'students_time': row['questions_date_added'],
                    'students_questions_asked': prv['students_questions_asked'] + 1,
                    'students_previous_question_time': row['questions_date_added']}
+
             if row['questions_id'] in ans_grouped.groups:
+                # if question has answers, update dependent average features
                 group = ans_grouped.get_group(row['questions_id'])
                 new = {**new, **{'students_average_question_age':
                                      group['answers_date_added'].iloc[0] - row['questions_date_added'],
@@ -140,8 +142,10 @@ class StuProc(BaseProc):
                                      group['answers_body_length'].sum(),
                                  'students_average_answer_amount':
                                      group.shape[0]}}
+
                 length = len(data[cur_stu])
                 if length != 1:
+                    # normalize these average features
                     for feature in ['students_average_question_age', 'students_average_question_body_length']:
                         if prv[feature] is not None:
                             new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
@@ -150,17 +154,22 @@ class StuProc(BaseProc):
                             new[feature] = (prv[feature] * ans_cnt + new[feature]) / (ans_cnt + group.shape[0])
                 ans_cnt += group.shape[0]
             else:
+                # if question left without answers, use previous values of averaged features
                 for feature in ['students_average_question_age', 'students_average_question_body_length',
                                 'students_average_answer_body_length', 'students_average_answer_amount']:
                     new[feature] = prv[feature]
             data[cur_stu].append(new)
 
+        # construct a dataframe out of dict of list of feature dicts
+        # data is a dist with mapping from student's id to his list of features
+        # each list contains dicts with mapping from feature name to its value on a particular moment
         df = pd.DataFrame([{**f, **{'students_id': id}} for (id, fs) in data.items() for f in fs])
-        # df['students_time'] = df['students_time'].shift(-1)
 
         df = df.merge(stu, on='students_id')
+        # launch feature pre-processing
         self.preprocess(df)
 
+        # re-order the columns
         df = df[['students_id', 'students_time'] + self.features['all']]
 
         return df
@@ -182,10 +191,10 @@ class ProProc(BaseProc):
                             ('professionals_state', 40)],
             'numerical': {
                 'zero': ['professionals_questions_answered'],
-                'mean': ['professionals_average_question_age', 'professionals_average_question_body_length',
+                'mean': ['professionals_average_question_body_length',
                          'professionals_average_answer_body_length']
             },
-            'date': ['professionals_date_joined', 'professionals_previous_answer_date']
+            'date': []  # ['professionals_date_joined', 'professionals_previous_answer_date']
         }
 
         self._unroll_features()
@@ -199,18 +208,16 @@ class ProProc(BaseProc):
         que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
         ans['answers_body_length'] = ans['answers_body'].apply(lambda s: len(str(s)))
 
-        for df, feature in [(pro, 'professionals_date_joined'),
-                            (que, 'questions_date_added'), (ans, 'answers_date_added')]:
-            df[feature] = pd.to_datetime(df[feature])
-
+        # prepare all the dataframes needed for iteration
         df = pro.merge(ans, left_on='professionals_id', right_on='answers_author_id') \
             .merge(que, left_on='answers_question_id', right_on='questions_id') \
             .sort_values('answers_date_added')
         data = {}
 
-        for i, row in tqdm(df.iterrows()):
+        for i, row in tqdm(df.iterrows(), desc="Professionals features"):
             cur_pro = row['professionals_id']
 
+            # default case, professional's feature values before he left any questions
             if cur_pro not in data:
                 new = {'professionals_questions_answered': 0,
                        'professionals_previous_answer_date': row['professionals_date_joined']}
@@ -221,6 +228,7 @@ class ProProc(BaseProc):
                 data[cur_pro] = [new]
 
             prv = data[cur_pro][-1]
+            # feature update rules
             new = {'professionals_time': row['answers_date_added'],
                    'professionals_questions_answered': prv['professionals_questions_answered'] + 1,
                    'professionals_previous_answer_date': row['answers_date_added'],
@@ -230,22 +238,29 @@ class ProProc(BaseProc):
                    'professionals_average_answer_body_length': row['answers_body_length']}
             length = len(data[cur_pro])
             if length != 1:
+                # normalize average feature values
                 for feature in ['professionals_average_question_age', 'professionals_average_question_body_length',
                                 'professionals_average_answer_body_length']:
                     new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
             data[cur_pro].append(new)
 
+        # construct a dataframe out of dict of list of feature dicts
+        # data is a dist with mapping from professional's id to his list of features
+        # each list contains dicts with mapping from feature name to its value on a particular moment
         df = pd.DataFrame([{**f, **{'professionals_id': id}} for (id, fs) in data.items() for f in fs])
-        # df['professionals_time'] = df['professionals_time'].shift(-1)
 
         df = df.merge(pro, on='professionals_id')
+        # launch feature pre-processing
         self.preprocess(df)
 
+        # prepare tag embeddings
         emb_len = list(self.embs.values())[0].shape[0]
         embs = df['professionals_industry_processed'].apply(lambda x: self.embs.get(x, np.zeros(emb_len)))
 
+        # re-order the columns
         df = df[['professionals_id', 'professionals_time'] + self.features['all']]
 
+        # append industry embeddings
         for i in range(emb_len):
             df[f'pro_emb_{i}'] = embs.apply(lambda x: x[i])
 

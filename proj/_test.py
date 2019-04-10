@@ -1,3 +1,5 @@
+import pickle
+
 import pandas as pd
 from processors import QueProc, StuProc, ProProc
 
