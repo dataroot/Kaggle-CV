@@ -111,4 +111,4 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
 
 if __name__ == '__main__':
-    drive('../../data/', 'dump/', '2018-09-01')
+    drive('../../data/', 'dump/', '2019-01-01')
