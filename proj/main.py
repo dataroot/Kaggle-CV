@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 from keras.optimizers import Adam
 
@@ -23,6 +22,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
     for var, file_name in [('que', 'questions.csv'), ('ans', 'answers.csv'),
                            ('pro', 'professionals.csv'), ('stu', 'students.csv')]:
         df = pd.read_csv(data_path + file_name)
+
         col = [col for col in df.columns if 'date' in col][0]
         df[col] = pd.to_datetime(df[col])
 
@@ -84,9 +84,10 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         if mode == 'Train':
             # in train mode, build, compile train and save model
-            model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2 + 1, ## 4-id,time; 1-currenttime
+            model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2 + 1,
+                               ## 4-id,time; 1-currenttime
                                que_input_embs=[102, 42], que_output_embs=[2, 2],
-                               pro_dim=len(pro_data.columns) - 2 + 1, ## 2-id,time; 1-currenttime
+                               pro_dim=len(pro_data.columns) - 2 + 1,  ## 2-id,time; 1-currenttime
                                pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
             model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
             model.fit_generator(bg, epochs=10, verbose=2)
