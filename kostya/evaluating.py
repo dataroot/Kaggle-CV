@@ -6,7 +6,8 @@ from matplotlib import pyplot as plt
 from sklearn.utils import shuffle
 from tqdm import tqdm_notebook as tqdmn
 
-def permutation_importance(model, batch, y, fn, n_trials=3):
+
+def permutation_importance(is_double: bool, is_content_related: bool, model, batch, y, fn, que_sep: int, pro_sep: int, n_trials: int = 3):
     """
     Calculate model feature importance via random permutations of feature values
 
@@ -18,28 +19,33 @@ def permutation_importance(model, batch, y, fn, n_trials=3):
     :param n_trials: number of shuffles for each feature
     :return: Pandas DataFrame with importance of each feature
     """
-    print("Test")
     # model performance on normal, non-shuffled data
     base_loss, base_acc = model.evaluate(batch, y)
     
-    que_emb, pro_emb, que_stat, pro_stat = batch
-    losses = []
-    pairs = [(fn['que_emb'], que_emb, 0), (fn['pro_emb'], pro_emb, 1), (fn['que_stat'], que_stat, 2), (fn['pro_stat'], pro_stat, 3)]
+    que_inputs, pro_inputs = batch
     
-    for names, arr, order in pairs:
-        for i, name in enumerate(names):
+    if is_content_related or is_double:
+        que_offset, pro_offset = 0, 0
+    else:
+        que_offset, pro_offset = que_sep, pro_sep
+    
+    losses = []
+    tuples = [(fn['que'], que_inputs, que_offset, 0), (fn['pro'], pro_inputs, pro_offset, 1)]
+    
+    for names, arr, offset, order_in_batch in tuples:
+        for i in range(len(names)):
             loss = 0
             for _ in range(n_trials):
                 arr_copy = copy.deepcopy(arr)
-                arr_copy[:, i] = shuffle(arr_copy[:, i])
+                arr_copy[:, offset + i] = shuffle(arr_copy[:, offset + i])
                 
                 batch_copy = copy.deepcopy(batch)
-                batch_copy[order] = arr_copy
+                batch_copy[order_in_batch] = arr_copy
                 
                 loss += model.evaluate(batch_copy, y, verbose=0)[0]
             losses.append(loss / n_trials)
     
-    feature_names = fn['que_emb'] + fn['pro_emb'] + fn['que_stat'] + fn['pro_stat']
+    feature_names = fn['que'] + fn['pro']
     fi = pd.DataFrame({'importance': losses}, index=feature_names)
     fi.sort_values(by='importance', inplace=True, ascending=True)
     fi['importance'] -= base_loss
@@ -47,13 +53,12 @@ def permutation_importance(model, batch, y, fn, n_trials=3):
     return fi
 
 
-def plot_fi(fi, fn, title='Feature importances via shuffle', xlabel='Change in loss after shuffling feature\'s values'):
+def plot_fi(fi, fn, title='Feature importances via shuffle', xlabel='Change in loss after shuffling feature values'):
     """
     Nicely plot Pandas DataFrame with feature importances
     """
-    fi.loc[fi.index.isin(fn['que_emb']), 'color'] = 'b'
-    fi.loc[fi.index.isin(fn['pro_emb']), 'color'] = 'r'
-    fi.loc[fi.index.isin(fn['stat']), 'color'] = 'y'
+    fi.loc[fi.index.isin(fn['que']), 'color'] = 'b'
+    fi.loc[fi.index.isin(fn['pro']), 'color'] = 'r'
     fig, ax = plt.subplots(figsize=(8, 20))
     plt.barh(fi.index, fi.importance, color=fi.color)
     plt.title(title)

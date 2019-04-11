@@ -1,5 +1,6 @@
 import pickle
 import random
+from scipy.stats import cauchy
 
 import keras
 import numpy as np
@@ -13,10 +14,9 @@ class BatchGenerator(keras.utils.Sequence):
     Generates batch of data in train and test modes
     """
     
-    def __init__(self, pos_size, neg_size, mode='train', return_stat=True, data_path='../../data/'):
+    def __init__(self, pos_size, neg_size, mode='train', data_path='../../data/'):
         self.pos_size = pos_size
         self.neg_size = neg_size
-        self.return_stat = return_stat
         
         que = pd.read_csv(data_path + 'questions.csv')
         tag_que = pd.read_csv(data_path + 'tag_questions.csv')
@@ -60,11 +60,15 @@ class BatchGenerator(keras.utils.Sequence):
         with open('industries_embs.pkl', 'rb') as f:
             self.ind_emb = pickle.load(f)
         
-        # Load que and pro statistical features
-        with open('que_feature_dict.pickle', 'rb') as f:
-            self.que_feature_dict = pickle.load(f)
-        with open('pro_feature_dict.pickle', 'rb') as f:
-            self.pro_feature_dict = pickle.load(f)
+        # Load que and pro content and time related features
+        with open('que_content_dict.pickle', 'rb') as f:
+            self.que_content_dict = pickle.load(f)
+        with open('que_time_dict.pickle', 'rb') as f:
+            self.que_time_dict = pickle.load(f)
+        with open('pro_content_dict.pickle', 'rb') as f:
+            self.pro_content_dict = pickle.load(f)
+        with open('pro_time_dict.pickle', 'rb') as f:
+            self.pro_time_dict = pickle.load(f)
         
         # Load time related dicts and lists
         with open('pro_answer_dates_dict.pickle', 'rb') as f:
@@ -95,6 +99,17 @@ class BatchGenerator(keras.utils.Sequence):
         # Load questions embeddings
         with open('questions_embs.pkl', 'rb') as f:
             self.que_emb = pickle.load(f)
+        
+#         print("Begin que computing!")
+#         que_emb_dict = {que:self.convert_que(que) for que in ans_que_pro.questions_id.unique()}
+        
+#         print("Begin pro computing!")
+#         pro_emb_dict = {pro:self.convert_pro(pro) for pro in ans_que_pro.professionals_id.unique()}
+        
+#         with open('que_emb_dict.pickle', 'wb') as f:
+#             pickle.dump(que_emb_dict, f)
+#         with open('pro_emb_dict.pickle', 'wb') as f:
+#             pickle.dump(pro_emb_dict, f)
     
     
     def __len__(self):
@@ -111,16 +126,21 @@ class BatchGenerator(keras.utils.Sequence):
         pos_cur_times = []
         neg_cur_times = []
         
-        pos_que_features, pos_pro_features = [], []
-        neg_que_features, neg_pro_features = [], []
+        pos_que_content, pos_que_time, pos_pro_content, pos_pro_time = [], [], [], []
+        neg_que_content, neg_que_time, neg_pro_content, neg_pro_time = [], [], [], []
         
         pos_ans = self.ans_list[self.pos_size * index: self.pos_size * (index + 1)]
         for ans in pos_ans:
             # Add que and pro features and dates to appropriate lists
             que, pro = self.ans_que_pro_dict[ans]
             pos_pairs.append((que, pro))
-            pos_que_features.append(self.que_feature_dict[que])
-            pos_pro_features.append(self.pro_feature_dict[pro])
+            
+            pos_que_content.append(self.que_content_dict[que])
+            pos_que_time.append(self.que_time_dict[que])
+            
+            pos_pro_content.append(self.pro_content_dict[pro])
+            pos_pro_time.append(self.pro_time_dict[pro])
+            
             pos_prev_dates.append(self.ans_prev_answer_date_dict[ans])
             pos_cur_times.append(self.ans_date_added_dict[ans])
         
@@ -128,12 +148,8 @@ class BatchGenerator(keras.utils.Sequence):
             ans = random.choice(self.ans_list)
             que, _ = self.ans_que_pro_dict[ans]
             
-            # Current time is e^(exponential with mean 3 truncated at 6) - 1
-            mean = 3
-            sample = np.random.exponential(mean)
-            while sample >= 6:
-                sample = np.random.exponential(mean)
-            cur_time = np.exp(sample) - 1
+            # Current time is realization of absolute value of Cauchy random variable
+            cur_time = np.abs(cauchy.rvs(loc=0, scale=12.5))
             
             # Inverse transform current time
             cur_time = (self.preproc['questions_date_added_time']
@@ -176,58 +192,61 @@ class BatchGenerator(keras.utils.Sequence):
 #             # Sample one professional from distribution of distances
 #             pro = np.random.choice(pros, p=distances)
 #             #-------------------------------------------------------------------------
-        
+            
             #-------------------------------------------------------------------------
             #                         WITHOUT DISTRIBUTION
-
+            
             pro = random.choice(valid_pros)
             while (que, pro) in self.que_pro_set:
                 pro = random.choice(valid_pros)
             #-------------------------------------------------------------------------
             
-            # Add que and pro data to all required lists
             prev_date = self.__negative_que_prev_answer_date(pro, cur_time)
+            
+            # Add que and pro features and dates to appropriate lists
             neg_pairs.append((que, pro))
-            neg_que_features.append(self.que_feature_dict[que])
-            neg_pro_features.append(self.pro_feature_dict[pro])
+            
+            neg_que_content.append(self.que_content_dict[que])
+            neg_que_time.append(self.que_time_dict[que])
+            
+            neg_pro_content.append(self.pro_content_dict[pro])
+            neg_pro_time.append(self.pro_time_dict[pro])
+            
             neg_prev_dates.append(prev_date)
             neg_cur_times.append(cur_time)
         
         pos_que_embeddings, pos_pro_embeddings = self.__convert(pos_pairs)
         neg_que_embeddings, neg_pro_embeddings = self.__convert(neg_pairs)
         
-        pos_que_stat = np.hstack([
-            np.array(pos_que_features),
-#             np.array(pos_cur_times)[:, np.newaxis],
-#             pos_que_embeddings,
+        pos_que = np.hstack([
+            np.array(pos_que_content),
+            pos_que_embeddings,
+            np.array(pos_que_time),
+            np.array(pos_cur_times)[:, np.newaxis],
         ])
-        neg_que_stat = np.hstack([
-            np.array(neg_que_features),
-#             np.array(neg_cur_times)[:, np.newaxis],
-#             neg_que_embeddings,
-        ])
-        
-        pos_pro_stat = np.hstack([
-            np.array(pos_pro_features),
-#             np.array(pos_prev_dates)[:, np.newaxis],
-#             np.array(pos_cur_times)[:, np.newaxis],
-#             pos_pro_embeddings,
-        ])
-        neg_pro_stat = np.hstack([
-            np.array(neg_pro_features),
-#             np.array(neg_prev_dates)[:, np.newaxis],
-#             np.array(neg_cur_times)[:, np.newaxis],
-#             neg_pro_embeddings,
+        neg_que = np.hstack([
+            np.array(neg_que_content),
+            neg_que_embeddings,
+            np.array(neg_que_time),
+            np.array(neg_cur_times)[:, np.newaxis],
         ])
         
-        return_list = [
-            np.vstack([pos_que_embeddings, neg_que_embeddings]), np.vstack([pos_pro_embeddings, neg_pro_embeddings])]
+        pos_pro = np.hstack([
+            np.array(pos_pro_content),
+            pos_pro_embeddings,
+            np.array(pos_pro_time),
+            np.array(pos_prev_dates)[:, np.newaxis],
+            np.array(pos_cur_times)[:, np.newaxis],
+        ])
+        neg_pro = np.hstack([
+            np.array(neg_pro_content),
+            neg_pro_embeddings,
+            np.array(neg_pro_time),
+            np.array(neg_prev_dates)[:, np.newaxis],
+            np.array(neg_cur_times)[:, np.newaxis],
+        ])
         
-        # TODO: change features to stat
-        if self.return_stat:
-            return_list.append(np.vstack([pos_que_stat, neg_que_stat]))
-            return_list.append(np.vstack([pos_pro_stat, neg_pro_stat]))
-        
+        return_list = [np.vstack([pos_que, neg_que]), np.vstack([pos_pro, neg_pro])]
         target = np.vstack([np.ones((self.pos_size, 1)), np.zeros((self.neg_size, 1))])
         
         return return_list, target
@@ -265,27 +284,61 @@ class BatchGenerator(keras.utils.Sequence):
                 pro_tags.append(np.zeros(10))
             pro_tag_emb = np.vstack(pro_tags).mean(axis = 0).reshape(-1)
             
-#             # Average embedding of student tags
-#             for tag in self.stu_tags.get(stu, []):
-#                 stu_tags.append(self.tag_emb.get(tag, np.zeros(10)))
-#             if len(stu_tags) == 0:
-#                 stu_tags.append(np.zeros(10))
-#             stu_tag_emb = np.vstack(stu_tags).mean(axis = 0).reshape(-1)
-            
             # Collect all question and student embeddings
             que_emb = self.que_emb[que]
-            x_que.append(np.hstack([que_emb,
-                                    que_tag_emb,
-#                                     stu_tag_emb
-                                    ]))
+            x_que.append(np.hstack([
+                que_emb,
+                que_tag_emb,
+            ]))
             
             # Collect all professional embeddings
             ind_emb = self.ind_emb.get(self.pro_ind[pro], np.zeros(10))
-            x_pro.append(np.hstack([ind_emb,
-                                    pro_tag_emb
-                                    ]))
+            x_pro.append(np.hstack([
+                ind_emb,
+                pro_tag_emb,
+            ]))
         
         return np.vstack(x_que), np.vstack(x_pro)
+    
+    
+    def convert_que(self, que):
+        x_que = []
+        que_tags = []
+            
+        # Average embedding of question tags
+        for tag in self.que_tags.get(que, []):
+            que_tags.append(self.tag_emb.get(tag, np.zeros(10)))
+        if len(que_tags) == 0:
+            que_tags.append(np.zeros(10))
+        que_tag_emb = np.vstack(que_tags).mean(axis = 0).reshape(-1)
+
+        # Collect all question and student embeddings
+        que_emb = self.que_emb[que]
+        x_que.append(np.hstack([que_emb,
+                                que_tag_emb,
+                                ]))
+        
+        return np.vstack(x_que)
+    
+    
+    def convert_pro(self, pro):
+        x_pro = []
+        pro_tags = []
+            
+        # Average embedding of professional tags
+        for tag in self.pro_tags.get(pro, []):
+            pro_tags.append(self.tag_emb.get(tag, np.zeros(10)))
+        if len(pro_tags) == 0:
+            pro_tags.append(np.zeros(10))
+        pro_tag_emb = np.vstack(pro_tags).mean(axis = 0).reshape(-1)
+
+        # Collect all professional embeddings
+        ind_emb = self.ind_emb.get(self.pro_ind[pro], np.zeros(10))
+        x_pro.append(np.hstack([ind_emb,
+                                pro_tag_emb
+                                ]))
+        
+        return np.vstack(x_pro)
     
     
     def on_epoch_end(self):
