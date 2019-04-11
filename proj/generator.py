@@ -1,9 +1,14 @@
 import random
+import pickle
 
 import keras
 import numpy as np
 import pandas as pd
 
+from sklearn.preprocessing import StandardScaler
+
+
+# TODO: consider questions without answers
 
 class BatchGenerator(keras.utils.Sequence):
     """
@@ -11,65 +16,122 @@ class BatchGenerator(keras.utils.Sequence):
     in form of batches of NumPy arrays
     """
 
-    def __init__(self, que: pd.DataFrame, pro: pd.DataFrame, batch_size):
+    def __init__(self, que: pd.DataFrame, stu: pd.DataFrame, pro: pd.DataFrame,
+                 batch_size: int, pos_pairs: list, nonneg_pairs: list, ss: StandardScaler, pro_dates: dict):
         """
         :param que: pre-processed questions data
         :param pro: pre-processed professionals data
-        :param batch_size: actually, half of the real batch size.
+        :param batch_size: actually, half of the real batch size
         Number of both positive and negative pairs present in generated batch
+        :param pos_pairs: tuples of question, student and professional, which form positive pair
+        (professional answered on the given question from correspondent student)
+        :param nonneg_pairs: tuples of question, student and professional, which are known to form a positive pair.
+        Superset of pos_pairs, used in sampling of negative pairs
+        :param ss: trained preprocessor of current_time feature
+        :param pro_dates: mappings from professional's id to his registration date
         """
         self.batch_size = batch_size
 
-        # lists of question and professionals ids
-        self.ques = list(que['questions_id'])
-        self.pros = list(pro['professionals_id'])
-
-        # sets of question-professional pairs achieved from question and professionals data
-        que_pairs = {(row['questions_id'], author) for i, row in que.iterrows()
-                     for author in str(row['answers_author_id']).split()}
-        pro_pairs = {(question, row['professionals_id']) for i, row in pro.iterrows()
-                     for question in str(row['answers_question_id']).split()}
-
-        # actual set of pairs is the intersection
-        self.pairs_set = que_pairs & pro_pairs
-        self.pairs_list = list(self.pairs_set)
-
-        # construct dicts mapping from entity id to its features
+        # extract mappings from question's id to question's date and features
         que_ar = que.values
         self.que_feat = {que_ar[i, 0]: que_ar[i, 2:] for i in range(que_ar.shape[0])}
-        pro_ar = pro.values
-        self.pro_feat = {pro_ar[i, 0]: pro_ar[i, 2:] for i in range(pro_ar.shape[0])}
+        self.que_time = {que_ar[i, 0]: pd.Timestamp(que_ar[i, 1]) for i in range(que_ar.shape[0])}
+
+        self.pos_pairs = [(que, stu, pro, self.que_time[que]) for que, stu, pro in pos_pairs]
+        self.on_epoch_end()  # shuffle pos_pairs
+        self.nonneg_pairs = set(nonneg_pairs)
+
+        # these lists are used in sampling of negative pairs
+        self.ques_stus_times = [(que, stu, self.que_time[que]) for que, stu, pro in pos_pairs]
+
+        self.pros = np.array([pro for que, stu, pro in nonneg_pairs])
+        self.pros_times = np.array([pro_dates[pro] for que, stu, pro in nonneg_pairs])
+
+        # simultaneously sort two arrays containing professional features
+        sorted_args = np.argsort(self.pros_times)
+        self.pros = self.pros[sorted_args]
+        self.pros_times = self.pros_times[sorted_args]
+
+        # extract mappings from student's id to student's date and features
+        self.stu_feat = {}
+        self.stu_time = {}
+        for stu_id, group in stu.groupby('students_id'):
+            group_ar = group.values[:, 1:]
+            self.stu_feat[stu_id] = np.array([group_ar[i, 1:] for i in range(group_ar.shape[0])])
+            self.stu_time[stu_id] = np.array([group_ar[i, 0] for i in range(group_ar.shape[0])])
+
+        # extract mappings from professional's id to professional's date and features
+        self.pro_feat = {}
+        self.pro_time = {}
+        for pro_id, group in pro.groupby('professionals_id'):
+            group_ar = group.values[:, 1:]
+            self.pro_feat[pro_id] = np.array([group_ar[i, 1:] for i in range(group_ar.shape[0])])
+            self.pro_time[pro_id] = np.array([group_ar[i, 0] for i in range(group_ar.shape[0])])
+
+        self.ss = ss
 
     def __len__(self):
-        # number of unique batches which can be generated
-        return len(self.pairs_list) // self.batch_size
+        return len(self.pos_pairs) // self.batch_size
+
+    @staticmethod
+    def __find(feat_ar: np.ndarray, time_ar: np.ndarray, search_time):
+        pos = np.searchsorted(time_ar[1:], search_time)
+        assert time_ar[pos] is pd.NaT or time_ar[pos] < search_time
+        return feat_ar[pos]
 
     def __convert(self, pairs: list) -> (np.ndarray, np.ndarray):
         """
         Convert list of pairs of ids to NumPy arrays
         of question and professionals features
         """
-        x_que, x_pro = [], []
-        for i, (que, pro) in enumerate(pairs):
-            x_que.append(self.que_feat[que])
-            x_pro.append(self.pro_feat[pro])
-        return np.vstack(x_que), np.vstack(x_pro)
+        x_que, x_pro, current_times = [], [], []
+        for que, stu, pro, current_time in pairs:
+            que_data = self.que_feat[que]
+
+            # find student's and professional's feature in current time
+            stu_data = BatchGenerator.__find(self.stu_feat[stu], self.stu_time[stu], current_time)
+            pro_data = BatchGenerator.__find(self.pro_feat[pro], self.pro_time[pro], current_time)
+
+            # prepare current time as feature itself
+            current_time = current_time.year + current_time.dayofyear / 365
+            current_times.append(current_time)
+
+            x_que.append(np.hstack([stu_data, que_data]))
+            x_pro.append(pro_data)
+
+        # preprocess current times features
+        current_times = self.ss.transform(np.array(current_times).reshape(-1, 1))
+        # and append them to both questions and professionals
+        return np.hstack([np.vstack(x_que), current_times]), np.hstack([np.vstack(x_pro), current_times])
 
     def __getitem__(self, index):
         """
         Generate the batch
         """
-        pos_pairs = self.pairs_list[self.batch_size * index: self.batch_size * (index + 1)]
+        pos_pairs = self.pos_pairs[self.batch_size * index: self.batch_size * (index + 1)]
         neg_pairs = []
 
         for i in range(len(pos_pairs)):
             while True:
-                # sample negative pair candidate
-                que = random.choice(self.ques)
-                pro = random.choice(self.pros)
-                # check if it's not a positive pair
-                if (que, pro) not in self.pairs_set:
-                    neg_pairs.append((que, pro))
+                # sample question, its student and time
+                que, stu, zero = random.choice(self.ques_stus_times)
+                # calculate shift between question's time and current
+                while True:
+                    shift = np.random.exponential(50) - 35
+                    if shift > 0:
+                        break
+                current_time = zero + pd.Timedelta(int(shift * 24 * 60), 'm')
+                # find number of professionals with registration date before current time
+                i = np.searchsorted(self.pros_times, current_time)
+                if i != 0:
+                    break
+
+            while True:
+                # sample professional for negative pair
+                pro = random.choice(self.pros[:i])
+                # check if he doesn't form a positive pair
+                if (que, stu, pro) not in self.nonneg_pairs:
+                    neg_pairs.append((que, stu, pro, current_time))
                     break
 
         # convert lists of pairs to NumPy arrays of features
@@ -82,4 +144,4 @@ class BatchGenerator(keras.utils.Sequence):
 
     def on_epoch_end(self):
         # shuffle positive pairs
-        self.pairs_list = random.sample(self.pairs_list, len(self.pairs_list))
+        self.pos_pairs = random.sample(self.pos_pairs, len(self.pos_pairs))

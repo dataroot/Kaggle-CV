@@ -11,7 +11,7 @@ class TextProcessor:
     Class for carrying all the text pre-processing stuff throughout the project
     """
 
-    def __init__(self, path: str = ''):
+    def __init__(self, path: str):
         """
         :param path: path to stemmed.pkl file -
         serialized with pickle dict with mappings from raw word to stemmed version of it.
