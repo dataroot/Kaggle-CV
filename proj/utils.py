@@ -15,7 +15,7 @@ class TextProcessor:
         """
         :param path: path to stemmed.pkl file -
         serialized with pickle dict with mappings from raw word to stemmed version of it.
-        Used to sped things up because NLTK's PorterStemmer is relatively slow
+        Used to speed things up because NLTK's PorterStemmer is relatively slow
         """
         self.path = path
 

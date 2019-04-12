@@ -4,7 +4,7 @@ from keras.optimizers import Adam
 from doc2vec import pipeline as pipeline_d2v
 from processors import QueProc, StuProc, ProProc
 from generator import BatchGenerator
-from models import Mothership
+# from models import Mothership
 from evaluation import permutation_importance, plot_fi
 
 
@@ -31,12 +31,14 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         print(var, train[var].shape, test[var].shape)
 
-    tag_que = pd.read_csv(data_path + 'tag_questions.csv')
-    tags = pd.read_csv(data_path + 'tags.csv').merge(tag_que, left_on='tags_tag_id', right_on='tag_questions_tag_id')
-    print('tags', tags.shape)
+    tags = pd.read_csv(data_path + 'tags.csv')
+    tag_que = pd.read_csv(data_path + 'tag_questions.csv').merge(tags, left_on='tag_questions_tag_id', right_on='tags_tag_id')
+    tag_pro = pd.read_csv(data_path + 'tag_users.csv').merge(tags, left_on='tag_users_tag_id', right_on='tags_tag_id')
+    print('tag_que', tag_que.shape)
+    print('tag_pro', tag_que.shape)
 
     # calculate and save tag and industry embeddings on train data
-    # pipeline_d2v(train['que'], train['ans'], train['pro'], tags, 10, dump_path)
+    # pipeline_d2v(train['que'], train['ans'], train['pro'], tag_que, 10, dump_path)
 
     nonneg_pairs = []
     for mode, data in [('Train', train), ('Test', test)]:
@@ -55,8 +57,8 @@ def drive(data_path: str, dump_path: str, split_date: str):
         #     df = df.loc[df['answers_date_added'] >= '2016-01-01'] # experiment
         df = df[['questions_id', 'students_id', 'professionals_id']]
 
-        # extract positive pairs, non-negative pairs are all the know positive pairs to the moment
-        pos_pairs = list(df.itertuples(index=False))
+        # extract positive pairs, non-negative pairs are all known positive pairs to the moment
+        pos_pairs = list(df.itertuples(index=False, name=None))
         nonneg_pairs += pos_pairs
         print(f'Positive pairs number: {len(pos_pairs)}, negative: {len(nonneg_pairs)}')
 
@@ -67,7 +69,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
         # TODO: make this step happen only once for all the data
 
         que_proc = QueProc(oblige_fit, dump_path)
-        que_data = que_proc.transform(data['que'], tags)
+        que_data = que_proc.transform(data['que'], tag_que)
         print('Questions: ', que_data.shape)
 
         stu_proc = StuProc(oblige_fit, dump_path)
@@ -75,41 +77,62 @@ def drive(data_path: str, dump_path: str, split_date: str):
         print('Students: ', stu_data.shape)
 
         pro_proc = ProProc(oblige_fit, dump_path)
-        pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'])
+        pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'], tag_pro)
         print('Professionals: ', pro_data.shape)
 
-        bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs,
-                            que_proc.pp['questions_date_added_time'], pro_dates)
-        print('Batches:', len(bg))
 
-        if mode == 'Train':
-            # in train mode, build, compile train and save model
-            model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2 + 1,
-                               ## 4-id,time; 1-currenttime
-                               que_input_embs=[102, 42], que_output_embs=[2, 2],
-                               pro_dim=len(pro_data.columns) - 2 + 1,  ## 2-id,time; 1-currenttime
-                               pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
-            model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
-            model.fit_generator(bg, epochs=10, verbose=2)
-            model.save_weights(dump_path + 'model.h5')
-        else:
-            # in test mode just evaluate it
-            loss, acc = model.evaluate_generator(bg)
-            print(f'Loss: {loss}, accuracy: {acc}')
+        # Dump processed data
+        print('Train' if mode == 'Train' else 'Test', 'data dump.\n')
 
-        # dummy batch generator used to extract single big batch of data to calculate feature importance
-        bg = BatchGenerator(que_data, stu_data, pro_data, 512, pos_pairs, nonneg_pairs,
-                            que_proc.pp['questions_date_added_time'], pro_dates)
+        import pickle
+        proc_path = 'proc_data/'
+        
+        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_que_data.npy', 'wb') as f:
+            pickle.dump(que_data, f)
+        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_stu_data.npy', 'wb') as f:
+            pickle.dump(stu_data, f)
+        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_pro_data.npy', 'wb') as f:
+            pickle.dump(pro_data, f)
+        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_pos_pairs', 'wb') as f:
+            pickle.dump(pos_pairs, f)
+        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_nonneg_pairs', 'wb') as f:
+            pickle.dump(nonneg_pairs, f)
+        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_pro_dates', 'wb') as f:
+            pickle.dump(pro_dates, f)
 
-        # dict with descriptions of feature names, used for visualization of feature importance
-        fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]) + ['que_current_time'],
-              "pro": list(pro_data.columns[2:]) + ['pro_current_time'],
-              'text': [f'que_emb_{i}' for i in range(10)] + [f'pro_emb_{i}' for i in range(10)]}
 
-        # calculate and plot feature importance
-        fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
-        plot_fi(fi, fn)
+#         bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs,
+#                             que_proc.pp['questions_date_added_time'], pro_dates)
+#         print('Batches:', len(bg))
+
+#         if mode == 'Train':
+#             # in train mode, build, compile train and save model
+#             model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2 + 1,
+#                                ## 4-id,time; 1-currenttime
+#                                que_input_embs=[102, 42], que_output_embs=[2, 2],
+#                                pro_dim=len(pro_data.columns) - 2 + 1,  ## 2-id,time; 1-currenttime
+#                                pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
+#             model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
+#             model.fit_generator(bg, epochs=10, verbose=2)
+#             model.save_weights(dump_path + 'model.h5')
+#         else:
+#             # in test mode just evaluate it
+#             loss, acc = model.evaluate_generator(bg)
+#             print(f'Loss: {loss}, accuracy: {acc}')
+
+#         # dummy batch generator used to extract single big batch of data to calculate feature importance
+#         bg = BatchGenerator(que_data, stu_data, pro_data, 512, pos_pairs, nonneg_pairs,
+#                             que_proc.pp['questions_date_added_time'], pro_dates)
+
+#         # dict with descriptions of feature names, used for visualization of feature importance
+#         fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]) + ['que_current_time'],
+#               "pro": list(pro_data.columns[2:]) + ['pro_current_time'],
+#               'text': [f'que_emb_{i}' for i in range(10)] + [f'pro_emb_{i}' for i in range(10)]}
+
+#         # calculate and plot feature importance
+#         fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
+#         plot_fi(fi, fn)
 
 
 if __name__ == '__main__':
-    drive('../../data/', 'dump/', '2019-01-01')
+    drive('../../data/', 'dump/', '2018-09-01')

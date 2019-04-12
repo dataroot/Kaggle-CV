@@ -4,6 +4,7 @@ import pickle
 import keras
 import numpy as np
 import pandas as pd
+from scipy.stats import cauchy
 
 from sklearn.preprocessing import StandardScaler
 
@@ -117,8 +118,8 @@ class BatchGenerator(keras.utils.Sequence):
                 que, stu, zero = random.choice(self.ques_stus_times)
                 # calculate shift between question's time and current
                 while True:
-                    shift = np.random.exponential(50) - 35
-                    if shift > 0:
+                    shift = np.abs(cauchy.rvs(loc=0, scale=8.8))
+                    if shift < 365:
                         break
                 current_time = zero + pd.Timedelta(int(shift * 24 * 60), 'm')
                 # find number of professionals with registration date before current time

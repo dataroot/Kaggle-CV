@@ -7,15 +7,17 @@ from sklearn.utils import shuffle
 from tqdm import tqdm_notebook as tqdmn
 
 
-def permutation_importance(is_double: bool, is_content_related: bool, model, batch, y, fn, que_sep: int, pro_sep: int, n_trials: int = 3):
+def permutation_importance(model: keras.models.Model, batch: np.ndarray, y: np.ndarray, fn: dict,
+                           que_sep: int = 0, pro_sep: int = 0, n_trials: int = 3) -> pd.DataFrame:
     """
     Calculate model feature importance via random permutations of feature values
 
     :param model: model to evaluate
-    :param x_que: pre-processed questions data
-    :param x_pro: pre-processed professionals data
+    :param batch: pre-processed batch of data
     :param y: target labels
     :param fn: dict with feature names of both questions and professionals
+    :param que_sep: number of the first question feature to shuffle
+    :param que_sep: number of the first professional feature to shuffle
     :param n_trials: number of shuffles for each feature
     :return: Pandas DataFrame with importance of each feature
     """
@@ -23,11 +25,7 @@ def permutation_importance(is_double: bool, is_content_related: bool, model, bat
     base_loss, base_acc = model.evaluate(batch, y)
     
     que_inputs, pro_inputs = batch
-    
-    if is_content_related or is_double:
-        que_offset, pro_offset = 0, 0
-    else:
-        que_offset, pro_offset = que_sep, pro_sep
+    que_offset, pro_offset = que_sep, pro_sep
     
     losses = []
     tuples = [(fn['que'], que_inputs, que_offset, 0), (fn['pro'], pro_inputs, pro_offset, 1)]
