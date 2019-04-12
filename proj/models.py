@@ -2,6 +2,7 @@ import tensorflow as tf
 from keras.models import Model
 from keras.layers import Input, Dense, Lambda, Embedding, Concatenate
 from keras.regularizers import l2
+from keras.optimizers import Adam
 
 '''
 class Encoder(Model):
@@ -87,7 +88,8 @@ class Mothership(Model):
             self.inter = Concatenate()(embs)
         else:
             self.inter = que_inputs
-        que_outputs = Dense(inter_dim, kernel_regularizer=l2(0.01))(self.inter)
+        self.inter = Dense(16, activation='tanh')(self.inter)
+        que_outputs = Dense(inter_dim)(self.inter)
 
         # professionals encoder
 
@@ -105,7 +107,8 @@ class Mothership(Model):
             self.inter = Concatenate()(embs)
         else:
             self.inter = pro_inputs
-        pro_outputs = Dense(inter_dim, kernel_regularizer=l2(0.01))(self.inter)
+        self.inter = Dense(16, activation='tanh')(self.inter)
+        pro_outputs = Dense(inter_dim)(self.inter)
 
         # aftermath
 

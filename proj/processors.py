@@ -29,7 +29,7 @@ class QueProc(BaseProc):
                 'zero': ['questions_body_length'],
                 'mean': []
             },
-            'date': ['questions_date_added']
+            'date': []  # ['questions_date_added']
         }
 
         self._unroll_features()
@@ -75,7 +75,6 @@ class QueProc(BaseProc):
         return df
 
 
-# TODO: consider question_body_length even if answers are absent
 # TODO: also compute features for students with no questions and professionals with no answers
 
 class StuProc(BaseProc):
@@ -90,10 +89,11 @@ class StuProc(BaseProc):
             'categorical': [('students_location', 100), ('students_state', 40)],
             'numerical': {
                 'zero': ['students_questions_asked'],
-                'mean': ['students_average_question_age', 'students_average_question_body_length',
-                         'students_average_answer_body_length', 'students_average_answer_amount']
+                'mean': ['students_average_question_body_length']
+                # ['students_average_question_age', 'students_average_question_body_length'] +
+                # ['students_average_answer_body_length', 'students_average_answer_amount']
             },
-            'date': ['students_date_joined', 'students_previous_question_time']
+            'date': []  # ['students_date_joined', 'students_previous_question_time']
         }
 
         self._unroll_features()
@@ -133,24 +133,22 @@ class StuProc(BaseProc):
             # new features with simple update rules
             new = {'students_time': row['questions_date_added'],
                    'students_questions_asked': prv['students_questions_asked'] + 1,
-                   'students_previous_question_time': row['questions_date_added']}
+                   'students_previous_question_time': row['questions_date_added'],
+                   'students_average_question_body_length': row['questions_body_length']}
 
+            length = len(data[cur_stu])
             if row['questions_id'] in ans_grouped.groups:
                 # if question has answers, update dependent average features
                 group = ans_grouped.get_group(row['questions_id'])
                 new = {**new, **{'students_average_question_age':
                                      group['answers_date_added'].iloc[0] - row['questions_date_added'],
-                                 'students_average_question_body_length':
-                                     row['questions_body_length'],
                                  'students_average_answer_body_length':
                                      group['answers_body_length'].sum(),
                                  'students_average_answer_amount':
                                      group.shape[0]}}
-
-                length = len(data[cur_stu])
-                if length != 1:
+                if ans_cnt != 0:
                     # normalize these average features
-                    for feature in ['students_average_question_age', 'students_average_question_body_length']:
+                    for feature in ['students_average_question_age']:
                         if prv[feature] is not None:
                             new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
                     for feature in ['students_average_answer_body_length', 'students_average_answer_amount']:
@@ -159,9 +157,14 @@ class StuProc(BaseProc):
                 ans_cnt += group.shape[0]
             else:
                 # if question left without answers, use previous values of averaged features
-                for feature in ['students_average_question_age', 'students_average_question_body_length',
+                for feature in ['students_average_question_age',
                                 'students_average_answer_body_length', 'students_average_answer_amount']:
                     new[feature] = prv[feature]
+
+            for feature in ['students_average_question_body_length']:
+                if prv[feature] is not None:
+                    new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
+
             data[cur_stu].append(new)
 
         # construct a dataframe out of dict of list of feature dicts
@@ -198,7 +201,7 @@ class ProProc(BaseProc):
                 'mean': ['professionals_average_question_body_length',
                          'professionals_average_answer_body_length']
             },
-            'date': ['professionals_date_joined', 'professionals_previous_answer_date']
+            'date': []  # ['professionals_date_joined', 'professionals_previous_answer_date']
         }
 
         self._unroll_features()

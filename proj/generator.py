@@ -102,7 +102,8 @@ class BatchGenerator(keras.utils.Sequence):
         # preprocess current times features
         current_times = self.ss.transform(np.array(current_times).reshape(-1, 1))
         # and append them to both questions and professionals
-        return np.hstack([np.vstack(x_que), current_times]), np.hstack([np.vstack(x_pro), current_times])
+        return np.vstack(x_que), np.vstack(x_pro)
+        # return np.hstack([np.vstack(x_que), current_times]), np.hstack([np.vstack(x_pro), current_times])
 
     def __getitem__(self, index):
         """

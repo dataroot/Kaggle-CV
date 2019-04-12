@@ -1,10 +1,9 @@
 import pandas as pd
-from keras.optimizers import Adam
 
 from doc2vec import pipeline as pipeline_d2v
 from processors import QueProc, StuProc, ProProc
 from generator import BatchGenerator
-from models import Mothership
+from models import Mothership, Adam
 from evaluation import permutation_importance, plot_fi
 
 
@@ -23,10 +22,10 @@ def drive(data_path: str, dump_path: str, split_date: str):
                            ('pro', 'professionals.csv'), ('stu', 'students.csv')]:
         df = pd.read_csv(data_path + file_name)
 
-        col = [col for col in df.columns if 'date' in col][0]
-        df[col] = pd.to_datetime(df[col])
+        date_col = [col for col in df.columns if 'date' in col][0]
+        df[date_col] = pd.to_datetime(df[date_col])
 
-        train[var] = df[df[col] < split_date]
+        train[var] = df[df[date_col] < split_date]
         test[var] = df
 
         print(var, train[var].shape, test[var].shape)
@@ -84,13 +83,13 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         if mode == 'Train':
             # in train mode, build, compile train and save model
-            model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2 + 1,
+            model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2,
                                ## 4-id,time; 1-currenttime
                                que_input_embs=[102, 42], que_output_embs=[2, 2],
-                               pro_dim=len(pro_data.columns) - 2 + 1,  ## 2-id,time; 1-currenttime
+                               pro_dim=len(pro_data.columns) - 2,  ## 2-id,time; 1-currenttime
                                pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
-            model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
-            model.fit_generator(bg, epochs=10, verbose=2)
+            model.compile(Adam(lr=0.002), loss='binary_crossentropy', metrics=['accuracy'])
+            model.fit_generator(bg, epochs=20, verbose=2)
             model.save_weights(dump_path + 'model.h5')
         else:
             # in test mode just evaluate it
@@ -102,9 +101,12 @@ def drive(data_path: str, dump_path: str, split_date: str):
                             que_proc.pp['questions_date_added_time'], pro_dates)
 
         # dict with descriptions of feature names, used for visualization of feature importance
-        fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]) + ['que_current_time'],
-              "pro": list(pro_data.columns[2:]) + ['pro_current_time'],
+        fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]),  # + ['que_current_time'],
+              "pro": list(pro_data.columns[2:]),  # + ['pro_current_time'],
               'text': [f'que_emb_{i}' for i in range(10)] + [f'pro_emb_{i}' for i in range(10)]}
+
+        print('Assert:', len(fn['que']), len(fn['pro']))
+        print(bg[0][0][0].shape, bg[0][0][1].shape)
 
         # calculate and plot feature importance
         fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
