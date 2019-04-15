@@ -88,8 +88,8 @@ class StuProc(BaseProc):
         self.features = {
             'categorical': [('students_location', 100), ('students_state', 40)],
             'numerical': {
-                'zero': ['students_questions_asked'],
-                'mean': ['students_average_question_body_length']
+                'zero': [],  # ['students_questions_asked'],
+                'mean': []  # ['students_average_question_body_length']
                 # ['students_average_question_age', 'students_average_question_body_length'] +
                 # ['students_average_answer_body_length', 'students_average_answer_amount']
             },
@@ -190,16 +190,19 @@ class ProProc(BaseProc):
     def __init__(self, oblige_fit, path=''):
         super().__init__(oblige_fit, path)
 
+        with open(path + 'tags_embs.pkl', 'rb') as file:
+            self.tag_embs = pickle.load(file)
+
         with open(path + 'industries_embs.pkl', 'rb') as file:
-            self.embs = pickle.load(file)
+            self.industry_embs = pickle.load(file)
 
         self.features = {
             'categorical': [('professionals_industry', 100), ('professionals_location', 100),
                             ('professionals_state', 40)],
             'numerical': {
-                'zero': ['professionals_questions_answered'],
-                'mean': ['professionals_average_question_body_length',
-                         'professionals_average_answer_body_length']
+                'zero': [],  # ['professionals_questions_answered'],
+                'mean': []  # ['professionals_average_question_body_length',
+                # 'professionals_average_answer_body_length']
             },
             'date': []  # ['professionals_date_joined', 'professionals_previous_answer_date']
         }
@@ -213,9 +216,14 @@ class ProProc(BaseProc):
     # TODO: add average difference between likes of question and answer
     # TODO: add averaged subscribed tag embedding
 
-    def transform(self, pro, que, ans) -> pd.DataFrame:
-        pro['professionals_state'] = pro['professionals_location'].apply(lambda loc: str(loc).split(', ')[-1])
+    def transform(self, pro, que, ans, tags) -> pd.DataFrame:
+        tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))
 
+        # aggregate tags for each professional
+        tags_grouped = tags.groupby('tag_users_user_id', as_index=False)[['tags_tag_name']] \
+            .aggregate(lambda x: ' '.join(x))
+
+        pro['professionals_state'] = pro['professionals_location'].apply(lambda loc: str(loc).split(', ')[-1])
         pro['professionals_industry_processed'] = pro['professionals_industry'].apply(lambda x: self.tp.process(x))
         que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
         ans['answers_body_length'] = ans['answers_body'].apply(lambda s: len(str(s)))
@@ -261,19 +269,39 @@ class ProProc(BaseProc):
         # each list contains dicts with mapping from feature name to its value on a particular moment
         df = pd.DataFrame([{**f, **{'professionals_id': id}} for (id, fs) in data.items() for f in fs])
 
-        df = df.merge(pro, on='professionals_id')
+        df = df.merge(pro, on='professionals_id').merge(tags_grouped, how='left', left_on='professionals_id',
+                                                        right_on='tag_users_user_id')
         # launch feature pre-processing
         self.preprocess(df)
 
-        # prepare tag embeddings
-        emb_len = list(self.embs.values())[0].shape[0]
-        embs = df['professionals_industry_processed'].apply(lambda x: self.embs.get(x, np.zeros(emb_len)))
+        # prepare subscribed tag embeddings
+
+        tag_emb_len = list(self.tag_embs.values())[0].shape[0]
+
+        def __convert(s):
+            embs = []
+            for tag in str(s).split():
+                if tag in self.tag_embs:
+                    embs.append(self.tag_embs[tag])
+            if len(embs) == 0:
+                embs.append(np.zeros(tag_emb_len))
+            return np.vstack(embs).mean(axis=0)
+
+        mean_tag_embs = df['tags_tag_name'].apply(__convert)
+
+        # prepare industry embeddings
+        industry_emb_len = list(self.industry_embs.values())[0].shape[0]
+        industry_embs = df['professionals_industry_processed'] \
+            .apply(lambda x: self.industry_embs.get(x, np.zeros(industry_emb_len)))
 
         # re-order the columns
         df = df[['professionals_id', 'professionals_time'] + self.features['all']]
 
-        # append industry embeddings
-        for i in range(emb_len):
-            df[f'pro_emb_{i}'] = embs.apply(lambda x: x[i])
+        # append subscribed tag embeddings
+        for i in range(tag_emb_len):
+            df[f'pro_tag_emb_{i}'] = mean_tag_embs.apply(lambda x: x[i])
+
+        for i in range(industry_emb_len):
+            df[f'pro_ind_emb_{i}'] = industry_embs.apply(lambda x: x[i])
 
         return df

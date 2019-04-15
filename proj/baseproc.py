@@ -47,10 +47,13 @@ class BaseProc(ABC):
         Called once after self.features specification in constructor of child class,
         unrolls all the features in single separate list self.features['all']
         """
-        self.features['all'] = [name for name, deg in self.features['categorical']] + \
-                               self.features['numerical']['zero'] + self.features['numerical']['mean'] + \
-                               [f + p for f in self.features['date']
-                                for p in ['_time', '_doy_sin', '_doy_cos']]
+        self.features['all'] = ([name for name, deg in self.features['categorical']]
+                                if 'categorical' in self.features else []) + \
+                               (self.features['numerical']['zero'] + self.features['numerical']['mean']
+                                if 'numerical' in self.features else []) + \
+                               ([f + p for f in self.features['date']
+                                 for p in ['_time', '_doy_sin', '_doy_cos']]
+                                if 'date' in self.features else [])
 
     def datetime(self, df: pd.DataFrame, feature: str):
         """
@@ -144,15 +147,19 @@ class BaseProc(ABC):
         """
         # preprocess all date features
         self.features['gen'] = []
-        for feature in self.features['date']:
-            self.datetime(df, feature)
+        if 'date' in self.features:
+            for feature in self.features['date']:
+                self.datetime(df, feature)
 
         # preprocess all numerical features, including generated features from dates
-        for fillmode in self.features['numerical']:
-            for feature in self.features['numerical'][fillmode] + (self.features['gen'] if fillmode == 'mean' else []):
-                if feature in df.columns:
-                    self.numerical(df, feature, fillmode)
+        if 'numerical' in self.features:
+            for fillmode in self.features['numerical']:
+                for feature in self.features['numerical'][fillmode] + \
+                               (self.features['gen'] if fillmode == 'mean' else []):
+                    if feature in df.columns:
+                        self.numerical(df, feature, fillmode)
 
         # preprocess all categorical features
-        for feature, n in self.features['categorical']:
-            self.categorical(df, feature, n)
+        if 'categorical' in self.features:
+            for feature, n in self.features['categorical']:
+                self.categorical(df, feature, n)

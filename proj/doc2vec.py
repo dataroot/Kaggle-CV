@@ -56,6 +56,8 @@ def vis(d2v: Doc2Vec):
     plt.show()
 
 
+# TODO: update to consider professional's tags
+
 def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.DataFrame, dim: int, path: str):
     """
     Pipeline for training and saving to drive embeddings for

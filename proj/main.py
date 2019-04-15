@@ -30,12 +30,16 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         print(var, train[var].shape, test[var].shape)
 
-    tag_que = pd.read_csv(data_path + 'tag_questions.csv')
-    tags = pd.read_csv(data_path + 'tags.csv').merge(tag_que, left_on='tags_tag_id', right_on='tag_questions_tag_id')
-    print('tags', tags.shape)
+    tags = pd.read_csv(data_path + 'tags.csv')
+    tag_que = pd.read_csv(data_path + 'tag_questions.csv') \
+        .merge(tags, left_on='tag_questions_tag_id', right_on='tags_tag_id')
+    tag_pro = pd.read_csv(data_path + 'tag_users.csv') \
+        .merge(tags, left_on='tag_users_tag_id', right_on='tags_tag_id')
+    print('tag_que', tag_que.shape)
+    print('tag_pro', tag_pro.shape)
 
     # calculate and save tag and industry embeddings on train data
-    # pipeline_d2v(train['que'], train['ans'], train['pro'], tags, 10, dump_path)
+    # pipeline_d2v(train['que'], train['ans'], train['pro'], tag_que, 10, dump_path)
 
     nonneg_pairs = []
     for mode, data in [('Train', train), ('Test', test)]:
@@ -55,7 +59,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
         df = df[['questions_id', 'students_id', 'professionals_id']]
 
         # extract positive pairs, non-negative pairs are all the know positive pairs to the moment
-        pos_pairs = list(df.itertuples(index=False))
+        pos_pairs = list(df.itertuples(index=False, name=None))
         nonneg_pairs += pos_pairs
         print(f'Positive pairs number: {len(pos_pairs)}, negative: {len(nonneg_pairs)}')
 
@@ -66,7 +70,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
         # TODO: make this step happen only once for all the data
 
         que_proc = QueProc(oblige_fit, dump_path)
-        que_data = que_proc.transform(data['que'], tags)
+        que_data = que_proc.transform(data['que'], tag_que)
         print('Questions: ', que_data.shape)
 
         stu_proc = StuProc(oblige_fit, dump_path)
@@ -74,7 +78,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
         print('Students: ', stu_data.shape)
 
         pro_proc = ProProc(oblige_fit, dump_path)
-        pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'])
+        pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'], tag_pro)
         print('Professionals: ', pro_data.shape)
 
         bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs,
@@ -103,7 +107,8 @@ def drive(data_path: str, dump_path: str, split_date: str):
         # dict with descriptions of feature names, used for visualization of feature importance
         fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]),  # + ['que_current_time'],
               "pro": list(pro_data.columns[2:]),  # + ['pro_current_time'],
-              'text': [f'que_emb_{i}' for i in range(10)] + [f'pro_emb_{i}' for i in range(10)]}
+              'text': [f'que_emb_{i}' for i in range(10)] +
+                      [f'pro_tag_emb_{i}' for i in range(10)] + [f'pro_ind_emb_{i}' for i in range(10)]}
 
         print('Assert:', len(fn['que']), len(fn['pro']))
         print(bg[0][0][0].shape, bg[0][0][1].shape)
