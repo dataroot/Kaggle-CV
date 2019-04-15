@@ -21,11 +21,12 @@ class BatchGenerator(keras.utils.Sequence):
                  batch_size: int, pos_pairs: list, nonneg_pairs: list, ss: StandardScaler, pro_dates: dict):
         """
         :param que: pre-processed questions data
+        :param stu: pre-processed students data
         :param pro: pre-processed professionals data
         :param batch_size: actually, half of the real batch size
         Number of both positive and negative pairs present in generated batch
         :param pos_pairs: tuples of question, student and professional, which form positive pair
-        (professional answered on the given question from correspondent student)
+        (professional answered on the given question from corresponding student)
         :param nonneg_pairs: tuples of question, student and professional, which are known to form a positive pair.
         Superset of pos_pairs, used in sampling of negative pairs
         :param ss: trained preprocessor of current_time feature
@@ -89,12 +90,12 @@ class BatchGenerator(keras.utils.Sequence):
         for que, stu, pro, current_time in pairs:
             que_data = self.que_feat[que]
 
-            # find student's and professional's feature in current time
+            # find student's and professional's feature at current time
             stu_data = BatchGenerator.__find(self.stu_feat[stu], self.stu_time[stu], current_time)
             pro_data = BatchGenerator.__find(self.pro_feat[pro], self.pro_time[pro], current_time)
 
             # prepare current time as feature itself
-            current_time = current_time.year + current_time.dayofyear / 365
+            current_time = current_time.year + (current_time.dayofyear + current_time.hour / 24) / 365
             current_times.append(current_time)
 
             x_que.append(np.hstack([stu_data, que_data]))
@@ -116,7 +117,7 @@ class BatchGenerator(keras.utils.Sequence):
             while True:
                 # sample question, its student and time
                 que, stu, zero = random.choice(self.ques_stus_times)
-                # calculate shift between question's time and current
+                # calculate shift between question's and current time
                 while True:
                     shift = np.abs(cauchy.rvs(loc=0, scale=8.8))
                     if shift < 365:

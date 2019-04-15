@@ -212,7 +212,6 @@ class ProProc(BaseProc):
     # TODO: add average time between answers
     # TODO: add average number of likes
     # TODO: add average difference between likes of question and answer
-    # TODO: add averaged subscribed tag embedding
 
     def transform(self, pro, que, ans, tags) -> pd.DataFrame:
         # process tags

@@ -36,7 +36,7 @@ def Encoder(x, middle_dim: int, output_dim: int, emb_input_dims: list, emb_outpu
 
 def Extractor(x, mask: np.ndarray):
     """
-    Extract columns whose indices are in or outside date_mask
+    Extract columns whose indices are in or outside content_mask
     """
     parts = []
     
@@ -50,23 +50,23 @@ def Extractor(x, mask: np.ndarray):
 
 class ContentModel(Model):
     """
-    The model with Encoder-based architecture
+    Content model with Encoder-based architecture
     """
     
     def __init__(self,
-                 que_dim: int, que_date_mask: np.ndarray, que_input_embs: list, que_output_embs: list,
-                 pro_dim: int, pro_date_mask: np.ndarray, pro_input_embs: list, pro_output_embs: list,
+                 que_dim: int, que_mask: np.ndarray,
+                 pro_dim: int, pro_mask: np.ndarray,
                  middle_dim: int, latent_dim: int):
         super().__init__()
 
         que_inputs = Input((que_dim, ))
         pro_inputs = Input((pro_dim, ))
 
-        que_features = Extractor(que_inputs, ~que_date_mask)
-        pro_features = Extractor(pro_inputs, ~pro_date_mask)
+        que_features = Extractor(que_inputs, que_mask)
+        pro_features = Extractor(pro_inputs, pro_mask)
 
-        que_encoded = Encoder(que_features, middle_dim, latent_dim, que_input_embs, que_output_embs)
-        pro_encoded = Encoder(pro_features, middle_dim, latent_dim, pro_input_embs, pro_output_embs)
+        que_encoded = Encoder(que_features, middle_dim, latent_dim, [], [])
+        pro_encoded = Encoder(pro_features, middle_dim, latent_dim, [], [])
 
         dist = Lambda(lambda x: tf.reduce_sum(tf.square(x[0]-x[1]), axis = -1)) \
             ([que_encoded, pro_encoded])
@@ -78,23 +78,23 @@ class ContentModel(Model):
 
 class DateModel(Model):
     """
-    The model with Encoder-based architecture
+    Date model with Encoder-based architecture
     """
     
     def __init__(self,
-                 que_dim: int, que_date_mask: np.ndarray,
-                 pro_dim: int, pro_date_mask: np.ndarray,
+                 que_dim: int, que_mask: np.ndarray, que_input_embs: list, que_output_embs: list,
+                 pro_dim: int, pro_mask: np.ndarray, pro_input_embs: list, pro_output_embs: list,
                  middle_dim: int, latent_dim: int):
         super().__init__()
         
         que_inputs = Input((que_dim, ))
         pro_inputs = Input((pro_dim, ))
         
-        que_features = Extractor(que_inputs, que_date_mask)
-        pro_features = Extractor(pro_inputs, pro_date_mask)
+        que_features = Extractor(que_inputs, que_mask)
+        pro_features = Extractor(pro_inputs, pro_mask)
         
-        que_encoded = Encoder(que_features, middle_dim, latent_dim, [], [])
-        pro_encoded = Encoder(pro_features, middle_dim, latent_dim, [], [])
+        que_encoded = Encoder(que_features, middle_dim, latent_dim, que_input_embs, que_output_embs)
+        pro_encoded = Encoder(pro_features, middle_dim, latent_dim, pro_input_embs, pro_output_embs)
         
         dist = Lambda(lambda x: tf.reduce_sum(tf.square(x[0]-x[1]), axis = -1)) \
             ([que_encoded, pro_encoded])
@@ -106,12 +106,12 @@ class DateModel(Model):
 
 class DoubleModel(Model):
     """
-    The model with Encoder-based architecture
+    Contains both Content and Date model
     """
     
     def __init__(self,
-                 que_dim: int, que_date_mask: np.ndarray, que_input_embs: list, que_output_embs: list,
-                 pro_dim: int, pro_date_mask: np.ndarray, pro_input_embs: list, pro_output_embs: list,
+                 que_dim: int, que_content_mask: np.ndarray, que_input_embs: list, que_output_embs: list,
+                 pro_dim: int, pro_content_mask: np.ndarray, pro_input_embs: list, pro_output_embs: list,
                  content_middle_dim: int, content_latent_dim: int,
                  date_middle_dim: int, date_latent_dim: int):
         super().__init__()
@@ -120,26 +120,27 @@ class DoubleModel(Model):
         pro_inputs = Input((pro_dim, ))
         
         self.content_model = ContentModel(
-            que_dim, que_date_mask, que_input_embs, que_output_embs,
-            pro_dim, pro_date_mask, pro_input_embs, pro_output_embs,
+            que_dim, que_content_mask,
+            pro_dim, pro_content_mask,
             content_middle_dim, content_latent_dim
         )
         self.date_model = DateModel(
-            que_dim, que_date_mask,
-            pro_dim, pro_date_mask,
+            que_dim, ~que_content_mask, que_input_embs, que_output_embs,
+            pro_dim, ~pro_content_mask, pro_input_embs, pro_output_embs,
             date_middle_dim, date_latent_dim
         )
         
         content_score = self.content_model([que_inputs, pro_inputs])
         date_score = self.date_model([que_inputs, pro_inputs])
         
-        score = Concatenate()([content_score, date_score])
+        score = date_score
+        # score = Concatenate()([content_score, date_score])
         
-        # Compute F1 score
-        F1_score = Lambda(lambda x: (x[:, 0] + x[:, 1]) / 2)(score)
-        F1_score = Reshape((1, ))(F1_score)
+        # # Compute score
+        # score = Lambda(lambda x: (x[:, 0] + x[:, 1]) / 2)(score)
+        # score = Reshape((1, ))(score)
         
-        super().__init__([que_inputs, pro_inputs], F1_score)
+        super().__init__([que_inputs, pro_inputs], score)
 
 
 class SimpleModel(Model):

@@ -27,9 +27,8 @@ def permutation_importance(model: keras.models.Model, batch: np.ndarray, y: np.n
     :param n_trials: number of shuffles for each feature
     :return: Pandas DataFrame with importance of each feature
     """
-    print("Begin2")
     # model performance on normal, non-shuffled data
-    base_loss, base_acc = model.evaluate(batch, y)
+    base_loss, base_acc = model.evaluate(batch, y, verbose=0)
     
     losses = []
     qfa, pfa = batch
