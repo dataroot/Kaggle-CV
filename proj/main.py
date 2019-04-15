@@ -56,7 +56,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
             df = df.loc[df['answers_date_added'] >= split_date]
         # else:
         #     df = df.loc[df['answers_date_added'] >= '2016-01-01'] # experiment
-        df = df[['questions_id', 'students_id', 'professionals_id']]
+        df = df[['questions_id', 'students_id', 'professionals_id', 'answers_date_added']]
 
         # extract positive pairs, non-negative pairs are all the know positive pairs to the moment
         pos_pairs = list(df.itertuples(index=False, name=None))
@@ -77,6 +77,9 @@ def drive(data_path: str, dump_path: str, split_date: str):
         stu_data = stu_proc.transform(data['stu'], data['que'], data['ans'])
         print('Students: ', stu_data.shape)
 
+        with pd.option_context('display.max_columns', 100, 'display.width', 1024):
+            print(stu_data)
+
         pro_proc = ProProc(oblige_fit, dump_path)
         pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'], tag_pro)
         print('Professionals: ', pro_data.shape)
@@ -93,7 +96,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
                                pro_dim=len(pro_data.columns) - 2,  ## 2-id,time; 1-currenttime
                                pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
             model.compile(Adam(lr=0.002), loss='binary_crossentropy', metrics=['accuracy'])
-            model.fit_generator(bg, epochs=20, verbose=2)
+            model.fit_generator(bg, epochs=10, verbose=2)
             model.save_weights(dump_path + 'model.h5')
         else:
             # in test mode just evaluate it

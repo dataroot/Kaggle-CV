@@ -56,3 +56,18 @@ class TextProcessor:
                 # use stemmed version of word
                 ret.append(self.stemmed[word])
         return ' '.join(ret)
+
+
+class Averager:
+    def __init__(self):
+        self.sum = 0
+        self.cnt = 0
+
+    def upd(self, val):
+        self.sum += val
+        self.cnt += 1
+
+    def get(self):
+        if self.cnt == 0:
+            return None
+        return self.sum / self.cnt

@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 
 from baseproc import BaseProc
+from utils import Averager
 
 from tqdm import tqdm
 
@@ -44,7 +45,7 @@ class QueProc(BaseProc):
 
         # append aggregated tags to each question
         tags_grouped = tags.groupby('tag_questions_question_id', as_index=False)[['tags_tag_name']] \
-            .aggregate(lambda x: ' '.join(x))
+            .aggregate(lambda x: ' '.join(set(x)))
         df = que.merge(tags_grouped, how='left', left_on='questions_id', right_on='tag_questions_question_id')
 
         # launch feature pre-processing
@@ -88,10 +89,9 @@ class StuProc(BaseProc):
         self.features = {
             'categorical': [('students_location', 100), ('students_state', 40)],
             'numerical': {
-                'zero': [],  # ['students_questions_asked'],
-                'mean': []  # ['students_average_question_body_length']
-                # ['students_average_question_age', 'students_average_question_body_length'] +
-                # ['students_average_answer_body_length', 'students_average_answer_amount']
+                'zero': ['students_questions_asked'],
+                'mean': ['students_average_question_body_length', 'students_average_answer_body_length',
+                         'students_average_answer_amount']
             },
             'date': []  # ['students_date_joined', 'students_previous_question_time']
         }
@@ -100,6 +100,7 @@ class StuProc(BaseProc):
 
     # TODO: add average number of likes feature
     # TODO: add average time between questions
+    # TODO: add average questions age
 
     def transform(self, stu, que, ans) -> pd.DataFrame:
         stu['students_state'] = stu['students_location'].apply(lambda s: str(s).split(', ')[-1])
@@ -108,11 +109,17 @@ class StuProc(BaseProc):
         ans['answers_body_length'] = ans['answers_body'].apply(lambda s: len(str(s)))
 
         # prepare all the dataframes needed for iteration
-        ans_grouped = ans.groupby('answers_question_id')
-        df = stu.merge(que, left_on='students_id', right_on='questions_author_id') \
-            .sort_values('questions_date_added')
+        one = stu.merge(que, left_on='students_id', right_on='questions_author_id')
+        two = one.merge(ans, left_on='questions_id', right_on='answers_question_id') \
+            .rename(columns={'answers_date_added': 'students_time'})
+        two['type'] = 'answer'
+        one['type'] = 'question'
+        one = one.rename(columns={'questions_date_added': 'students_time'})
+        print(one.shape, one.columns)
+        print(two.shape, two.columns)
+        df = pd.concat([one, two], ignore_index=True).sort_values('students_time')
         data = {}
-        ans_cnt = 0
+        avgs = {feature: Averager() for feature in self.features['numerical']['mean']}
 
         for i, row in tqdm(df.iterrows(), desc="Students features"):
             cur_stu = row['students_id']
@@ -121,53 +128,32 @@ class StuProc(BaseProc):
             if cur_stu not in data:
                 new = {'students_questions_asked': 0,
                        'students_previous_question_time': row['students_date_joined']}
-                for feature in ['students_time', 'students_average_question_age',
-                                'students_average_question_body_length',
-                                'students_average_answer_body_length', 'students_average_answer_amount']:
+                for feature in ['students_time'] + self.features['numerical']['mean']:
                     new[feature] = None
                 data[cur_stu] = [new]
 
             # features on previous timestamp
             prv = data[cur_stu][-1]
+            new = prv.copy()
+            new['students_time'] = row['students_time']
 
-            # new features with simple update rules
-            new = {'students_time': row['questions_date_added'],
-                   'students_questions_asked': prv['students_questions_asked'] + 1,
-                   'students_previous_question_time': row['questions_date_added'],
-                   'students_average_question_body_length': row['questions_body_length']}
-
-            length = len(data[cur_stu])
-            if row['questions_id'] in ans_grouped.groups:
-                # if question has answers, update dependent average features
-                group = ans_grouped.get_group(row['questions_id'])
-                new = {**new, **{'students_average_question_age':
-                                     group['answers_date_added'].iloc[0] - row['questions_date_added'],
-                                 'students_average_answer_body_length':
-                                     group['answers_body_length'].sum(),
-                                 'students_average_answer_amount':
-                                     group.shape[0]}}
-                if ans_cnt != 0:
-                    # normalize these average features
-                    for feature in ['students_average_question_age']:
-                        if prv[feature] is not None:
-                            new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
-                    for feature in ['students_average_answer_body_length', 'students_average_answer_amount']:
-                        if prv[feature] is not None:
-                            new[feature] = (prv[feature] * ans_cnt + new[feature]) / (ans_cnt + group.shape[0])
-                ans_cnt += group.shape[0]
+            if row['type'] == 'question':
+                new['students_questions_asked'] += 1
+                new['students_previous_question_time'] = row['questions_date_added']
+                new['students_average_question_body_length'] = row['questions_body_length']
             else:
-                # if question left without answers, use previous values of averaged features
-                for feature in ['students_average_question_age',
-                                'students_average_answer_body_length', 'students_average_answer_amount']:
-                    new[feature] = prv[feature]
+                new['students_average_answer_body_length'] = row['answers_body_length']
+                new['students_average_answer_amount'] = new['students_average_answer_amount'] + 1 \
+                    if new['students_average_answer_amount'] is not None else 1
 
-            for feature in ['students_average_question_body_length']:
-                if prv[feature] is not None:
-                    new[feature] = (prv[feature] * (length - 1) + new[feature]) / length
+            for feature in ['students_average_question_body_length'] if row['type'] == 'question' else \
+                    ['students_average_answer_body_length', 'students_average_answer_amount']:
+                avgs[feature].upd(new[feature])
+                new[feature] = avgs[feature].get()
 
             data[cur_stu].append(new)
 
-        # construct a dataframe out of dict of list of feature dicts
+        # construct a DataFrame out of dict of list of feature dicts
         # data is a dist with mapping from student's id to his list of features
         # each list contains dicts with mapping from feature name to its value on a particular moment
         df = pd.DataFrame([{**f, **{'students_id': id}} for (id, fs) in data.items() for f in fs])
@@ -221,7 +207,7 @@ class ProProc(BaseProc):
 
         # aggregate tags for each professional
         tags_grouped = tags.groupby('tag_users_user_id', as_index=False)[['tags_tag_name']] \
-            .aggregate(lambda x: ' '.join(x))
+            .aggregate(lambda x: ' '.join(set(x)))
 
         pro['professionals_state'] = pro['professionals_location'].apply(lambda loc: str(loc).split(', ')[-1])
         pro['professionals_industry_processed'] = pro['professionals_industry'].apply(lambda x: self.tp.process(x))

@@ -38,15 +38,15 @@ class BatchGenerator(keras.utils.Sequence):
         self.que_feat = {que_ar[i, 0]: que_ar[i, 2:] for i in range(que_ar.shape[0])}
         self.que_time = {que_ar[i, 0]: pd.Timestamp(que_ar[i, 1]) for i in range(que_ar.shape[0])}
 
-        self.pos_pairs = [(que, stu, pro, self.que_time[que]) for que, stu, pro in pos_pairs]
+        self.pos_pairs = pos_pairs
         self.on_epoch_end()  # shuffle pos_pairs
-        self.nonneg_pairs = set(nonneg_pairs)
+        self.nonneg_pairs = {(que, stu, pro) for que, stu, pro, time in nonneg_pairs}
 
         # these lists are used in sampling of negative pairs
-        self.ques_stus_times = [(que, stu, self.que_time[que]) for que, stu, pro in pos_pairs]
+        self.ques_stus_times = [(que, stu, self.que_time[que]) for que, stu, pro, time in pos_pairs]
 
-        self.pros = np.array([pro for que, stu, pro in nonneg_pairs])
-        self.pros_times = np.array([pro_dates[pro] for que, stu, pro in nonneg_pairs])
+        self.pros = np.array([pro for que, stu, pro, time in nonneg_pairs])
+        self.pros_times = np.array([pro_dates[pro] for que, stu, pro, time in nonneg_pairs])
 
         # simultaneously sort two arrays containing professional features
         sorted_args = np.argsort(self.pros_times)
