@@ -12,48 +12,56 @@ import keras
 jtplot.style('gruvboxd')
 
 
-def permutation_importance(model: keras.models.Model, x_que: np.ndarray, x_pro: np.ndarray, y: np.ndarray,
-                           fn: dict, n_trials: int) -> pd.DataFrame:
+def permutation_importance(model: keras.models.Model, batch: np.ndarray, y: np.ndarray, qfn: np.array, pfn: np.array,
+                           que_mask: np.ndarray, pro_mask: np.ndarray, n_trials: int = 3) -> pd.DataFrame:
     """
     Calculate model feature importance via random permutations of feature values
 
     :param model: model to evaluate
-    :param x_que: pre-processed questions data
-    :param x_pro: pre-processed professionals data
+    :param batch: pre-processed batch of data
     :param y: target labels
-    :param fn: dict with feature names of both questions and professionals
+    :param qfn: numpy array with question feature names
+    :param pfn: numpy array with professional feature names
+    :param que_mask: mask of question features
+    :param pro_mask: mask of professional features
     :param n_trials: number of shuffles for each feature
     :return: Pandas DataFrame with importance of each feature
     """
     # model performance on normal, non-shuffled data
-    base_loss, base_acc = model.evaluate([x_que, x_pro], y)
+    base_loss, base_acc = model.evaluate(batch, y, verbose=0)
+    
     losses = []
-    for i, name in enumerate(tqdm(fn['que'] + fn['pro'], desc="Feature importance")):
-        loss = 0
-        for j in range(n_trials):
-            x_que_i, x_pro_i = copy.deepcopy(x_que), copy.deepcopy(x_pro)
-
-            if name in fn['que']:
-                x_que_i[:, i] = shuffle(x_que_i[:, i])
-            else:
-                x_pro_i[:, i - len(fn['que'])] = shuffle(x_pro_i[:, i - len(fn['que'])])
-            loss += model.evaluate([x_que_i, x_pro_i], y, verbose=0)[0]
-
-        losses.append(loss / n_trials)
-
-    fi = pd.DataFrame({'importance': losses}, index=fn['que'] + fn['pro'])
+    qfa, pfa = batch
+    tuples = [(qfa, que_mask, 0), (pfa, pro_mask, 1)]
+    
+    for fa, mask, batch_order in tuples:
+        for i, in_mask in enumerate(mask):
+            if in_mask:
+                loss = 0
+                for _ in range(n_trials):
+                    fa_copy = copy.deepcopy(fa)
+                    fa_copy[:, i] = shuffle(fa_copy[:, i])
+                    
+                    batch_copy = copy.deepcopy(batch)
+                    batch_copy[batch_order] = fa_copy
+                    
+                    loss += model.evaluate(batch_copy, y, verbose=0)[0]
+                losses.append(loss / n_trials)
+    
+    fn = np.concatenate([qfn[que_mask], pfn[pro_mask]])
+    fi = pd.DataFrame({'importance': losses}, index=fn)
     fi.sort_values(by='importance', inplace=True, ascending=True)
     fi['importance'] -= base_loss
-
+    
     return fi
 
 
-def plot_fi(fi, fn, title='Feature importances via shuffle', xlabel='Change in loss after shuffling feature\'s values'):
+def plot_fi(fi, qfn, pfn, title='Feature importance via shuffle', xlabel='Change in loss after shuffling feature values'):
     """
     Nicely plot Pandas DataFrame with feature importance
     """
-    fi['color'] = 'b'
-    fi.loc[fi.index.isin(fn['text']), 'color'] = 'r'
+    fi.loc[fi.index.isin(qfn), 'color'] = 'b'
+    fi.loc[fi.index.isin(pfn), 'color'] = 'r'
     fig, ax = plt.subplots(figsize=(8, 20))
     plt.barh(fi.index, fi.importance, color=fi.color)
     plt.title(title)

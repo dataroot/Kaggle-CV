@@ -1,119 +1,197 @@
+import numpy as np
 import tensorflow as tf
 from keras.models import Model
-from keras.layers import Input, Dense, Lambda, Embedding, Concatenate
+from keras.layers import Input, Dense, Lambda, Embedding, Concatenate, Reshape
 from keras.regularizers import l2
 from keras.optimizers import Adam
 
-'''
-class Encoder(Model):
+
+def Categorizer(x, emb_input_dims: list, emb_output_dims: list):
     """
-    Model for extraction of high-level feature vector from question or professional
+    Creates multidimensional trainable embeddings for categorical features
     """
+    n_embs = len(emb_input_dims)
+    
+    if n_embs > 0:
+        embs = []
+        
+        for i, nunique, dim in zip(range(n_embs), emb_input_dims, emb_output_dims):
+            tmp = Lambda(lambda x: x[:, i])(x)
+            embs.append(Embedding(nunique, dim)(tmp))
+        
+        embs.append(Lambda(lambda x: x[:, n_embs:])(x))
+        x = Concatenate()(embs)
+    
+    return x
 
-    def __init__(self, input_dim: int, output_dim: int, emb_input_dims: list, emb_output_dims: list):
-        """
-        :param input_dim: dimension of raw feature vector
-        :param output_dim: dimension of computed high-level feature vector
-        :param emb_input_dims: number of unique classes in categorical features
-        :param emb_output_dims: embedding dimensions of categorical features
-        """
-        inputs = Input((input_dim,))
-        n_embs = len(emb_input_dims)
 
-        if n_embs > 0:
-            embs = []
-
-            # iterate over categorical features
-            for i, nunique, dim in zip(range(n_embs), emb_input_dims, emb_output_dims):
-                # separate their values with Lambda layer
-                tmp = Lambda(lambda x: x[:, i])(inputs)
-                # pass them through Embedding layer
-                embs.append(Embedding(nunique, dim)(tmp))
-
-            # pass all the numerical features directly
-            embs.append(Lambda(lambda x: x[:, n_embs:])(inputs))
-            # and concatenate them
-            self.inter = Concatenate()(embs)
-        else:
-            self.inter = inputs
-
-        # it's only a single linear transformation, actually
-        outputs = Dense(output_dim, kernel_regularizer=l2(0.01))(self.inter)
-
-        super().__init__(inputs, outputs)
-
-class Mothership(Model):
+def Encoder(x, middle_dim: int, output_dim: int, emb_input_dims: list, emb_output_dims: list):
     """
-    Main model which combines two encoders (for questions and professionals),
-    calculates distance between high-level feature vectors and applies activation
+   Computes latent space representation
     """
-
-    def __init__(self, que_dim: int, que_input_embs: list, que_output_embs: list,
-                 pro_dim: int, pro_input_embs: list, pro_output_embs: list, inter_dim: int):
-        super().__init__()  # idk y
-
-        # build an Encoder model for questions
-        self.que_model = Encoder(que_dim, inter_dim, que_input_embs, que_output_embs)
-        # same for professionals
-        self.pro_model = Encoder(pro_dim, inter_dim, pro_input_embs, pro_output_embs)
-
-        # calculate distance between high-level feature vectors
-        self.merged = Lambda(lambda x: tf.reduce_sum(tf.square(x[0] - x[1]), axis=-1))(
-            [self.que_model.outputs[0], self.pro_model.outputs[0]])
-        # and apply activation - e^-x here, actually
-        outputs = Lambda(lambda x: tf.reshape(tf.exp(-self.merged), (-1, 1)))(self.merged)
-
-        super().__init__([self.que_model.inputs[0], self.pro_model.inputs[0]], outputs)
-'''
+    x = Categorizer(x, emb_input_dims, emb_output_dims)
+    
+    x = Dense(middle_dim, activation='tanh')(x)
+    x = Dense(output_dim)(x)
+    return x
 
 
-# simplified version of Mothership class above. For additional comments, take a look above
-class Mothership(Model):
-    def __init__(self, que_dim: int, que_input_embs: list, que_output_embs: list,
-                 pro_dim: int, pro_input_embs: list, pro_output_embs: list, inter_dim: int):
+def Extractor(x, mask: np.ndarray):
+    """
+    Selects columns from mask
+    """
+    parts = []
+    
+    for i, in_mask in enumerate(mask):
+        if in_mask:
+            parts.append( Lambda(lambda x: x[:, i:(i+1)])(x) )
+    
+    x = Concatenate()(parts)
+    return x
 
-        # questions encoder
 
-        que_inputs = Input((que_dim,))
-        n_embs = len(que_input_embs)
+class ContentModel(Model):
+    """
+    Content model with Encoder-based architecture
+    """
+    
+    def __init__(self,
+                 que_dim: int, que_mask: np.ndarray,
+                 pro_dim: int, pro_mask: np.ndarray,
+                 middle_dim: int, latent_dim: int):
+        super().__init__()
 
-        if n_embs > 0:
-            embs = []
+        que_inputs = Input((que_dim, ))
+        pro_inputs = Input((pro_dim, ))
 
-            for i, nunique, dim in zip(range(n_embs), que_input_embs, que_output_embs):
-                tmp = Lambda(lambda x: x[:, i])(que_inputs)
-                embs.append(Embedding(nunique, dim)(tmp))
+        que_features = Extractor(que_inputs, que_mask)
+        pro_features = Extractor(pro_inputs, pro_mask)
 
-            embs.append(Lambda(lambda x: x[:, n_embs:])(que_inputs))
-            self.inter = Concatenate()(embs)
-        else:
-            self.inter = que_inputs
-        self.inter = Dense(16, activation='tanh')(self.inter)
-        que_outputs = Dense(inter_dim)(self.inter)
+        self.que_encoded = Encoder(que_features, middle_dim, latent_dim, [], [])
+        self.pro_encoded = Encoder(pro_features, middle_dim, latent_dim, [], [])
 
-        # professionals encoder
+        dist = Lambda(lambda x: tf.reduce_sum(tf.square(x[0]-x[1]), axis = -1)) \
+            ([self.que_encoded, self.pro_encoded])
 
-        pro_inputs = Input((pro_dim,))
-        n_embs = len(pro_input_embs)
-
-        if n_embs > 0:
-            embs = []
-
-            for i, nunique, dim in zip(range(n_embs), pro_input_embs, pro_output_embs):
-                tmp = Lambda(lambda x: x[:, i])(pro_inputs)
-                embs.append(Embedding(nunique, dim)(tmp))
-
-            embs.append(Lambda(lambda x: x[:, n_embs:])(pro_inputs))
-            self.inter = Concatenate()(embs)
-        else:
-            self.inter = pro_inputs
-        self.inter = Dense(16, activation='tanh')(self.inter)
-        pro_outputs = Dense(inter_dim)(self.inter)
-
-        # aftermath
-
-        self.merged = Lambda(lambda x: tf.reduce_sum(tf.square(x[0] - x[1]), axis=-1))(
-            [que_outputs, pro_outputs])
-        outputs = Lambda(lambda x: tf.reshape(tf.exp(-self.merged), (-1, 1)))(self.merged)
+        outputs = Lambda(lambda x: tf.reshape(tf.exp(-x), (-1, 1)))(dist)
 
         super().__init__([que_inputs, pro_inputs], outputs)
+
+
+class DateModel(Model):
+    """
+    Date model with Encoder-based architecture
+    """
+    
+    def __init__(self,
+                 que_dim: int, que_mask: np.ndarray, que_input_embs: list, que_output_embs: list,
+                 pro_dim: int, pro_mask: np.ndarray, pro_input_embs: list, pro_output_embs: list,
+                 middle_dim: int, latent_dim: int):
+        super().__init__()
+        
+        que_inputs = Input((que_dim, ))
+        pro_inputs = Input((pro_dim, ))
+        
+        que_features = Extractor(que_inputs, que_mask)
+        pro_features = Extractor(pro_inputs, pro_mask)
+        
+        self.que_encoded = Encoder(que_features, middle_dim, latent_dim, que_input_embs, que_output_embs)
+        self.pro_encoded = Encoder(pro_features, middle_dim, latent_dim, pro_input_embs, pro_output_embs)
+        
+        dist = Lambda(lambda x: tf.reduce_sum(tf.square(x[0]-x[1]), axis = -1)) \
+            ([self.que_encoded, self.pro_encoded])
+        
+        outputs = Lambda(lambda x: tf.reshape(tf.exp(-x), (-1, 1)))(dist)
+        
+        super().__init__([que_inputs, pro_inputs], outputs)
+
+
+class DoubleModel(Model):
+    """
+    Contains both Content and Date model
+    """
+    
+    def __init__(self,
+                 que_dim: int, que_content_mask: np.ndarray, que_input_embs: list, que_output_embs: list,
+                 pro_dim: int, pro_content_mask: np.ndarray, pro_input_embs: list, pro_output_embs: list,
+                 content_middle_dim: int, content_latent_dim: int,
+                 date_middle_dim: int, date_latent_dim: int):
+        super().__init__()
+        
+        que_inputs = Input((que_dim, ))
+        pro_inputs = Input((pro_dim, ))
+        
+        self.content_model = ContentModel(
+            que_dim, que_content_mask,
+            pro_dim, pro_content_mask,
+            content_middle_dim, content_latent_dim
+        )
+        self.date_model = DateModel(
+            que_dim, ~que_content_mask, que_input_embs, que_output_embs,
+            pro_dim, ~pro_content_mask, pro_input_embs, pro_output_embs,
+            date_middle_dim, date_latent_dim
+        )
+        
+        content_score = self.content_model([que_inputs, pro_inputs])
+        date_score = self.date_model([que_inputs, pro_inputs])
+        
+        score = date_score
+        
+        # # Compute score
+        # score = Lambda(lambda x: (x[0] + x[1]) / 2)([content_score, date_score])
+        # score = Reshape((1, ))(score)
+        
+        super().__init__([que_inputs, pro_inputs], score)
+
+
+class SimpleModel(Model):
+    """
+    The model with Simple architecture
+    """
+    
+    def __init__(self,
+                 que_dim: int, que_input_embs: list, que_output_embs: list,
+                 pro_dim: int, pro_input_embs: list, pro_output_embs: list):
+        super().__init__()
+        
+        que_inputs = Input((que_dim, ))
+        pro_inputs = Input((pro_dim, ))
+        
+        que_features = Categorizer(que_inputs, que_input_embs, que_output_embs)
+        pro_features = Categorizer(pro_inputs, pro_input_embs, pro_output_embs)
+        
+        x = Concatenate()([que_features, pro_features])
+        
+        x = Dense(30, activation='tanh')(x)
+        x = Dense(15, activation='tanh')(x)
+        
+        outputs = Dense(1, activation='sigmoid')(x)
+        
+        super().__init__([que_inputs, pro_inputs], outputs)
+
+
+class EncoderModel(Model):
+    """
+    The model with Encoder-based architecture that concatenates que and pro latent-space representations
+    and passes them through several Dense layers.
+    """
+    
+    def __init__(self,
+                 que_dim: int, que_input_embs: list, que_output_embs: list,
+                 pro_dim: int, pro_input_embs: list, pro_output_embs: list,
+                 middle_dim: int, latent_dim: int):
+        super().__init__()
+        
+        que_inputs = Input((que_dim, ))
+        pro_inputs = Input((pro_dim, ))
+        
+        que_encoded = Encoder(que_inputs, que_dim, middle_dim, latent_dim, que_input_embs, que_output_embs)
+        pro_encoded = Encoder(pro_inputs, pro_dim, middle_dim, latent_dim, pro_input_embs, pro_output_embs)
+        
+        x = Concatenate()([que_encoded, pro_encoded])
+        
+        x = Dense(10, activation='tanh')(x)
+        outputs = Dense(1, activation='sigmoid')(x)
+        
+        super().__init__([que_inputs, pro_inputs], outputs)
+

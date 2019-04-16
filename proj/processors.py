@@ -38,6 +38,7 @@ class QueProc(BaseProc):
     # TODO: add number of tags feature
 
     def transform(self, que, tags):
+        # process tags
         tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))
 
         que['questions_time'] = que['questions_date_added']
@@ -71,7 +72,7 @@ class QueProc(BaseProc):
 
         # append tag embeddings
         for i in range(emb_len):
-            df[f'que_emb_{i}'] = mean_embs.apply(lambda x: x[i])
+            df[f'que_tag_emb_{i}'] = mean_embs.apply(lambda x: x[i])
 
         return df
 

@@ -58,7 +58,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
         #     df = df.loc[df['answers_date_added'] >= '2016-01-01'] # experiment
         df = df[['questions_id', 'students_id', 'professionals_id', 'answers_date_added']]
 
-        # extract positive pairs, non-negative pairs are all the know positive pairs to the moment
+        # extract positive pairs, non-negative pairs are all known positive pairs to the moment
         pos_pairs = list(df.itertuples(index=False, name=None))
         nonneg_pairs += pos_pairs
         print(f'Positive pairs number: {len(pos_pairs)}, negative: {len(nonneg_pairs)}')
