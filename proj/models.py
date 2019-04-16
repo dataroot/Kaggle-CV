@@ -65,11 +65,11 @@ class ContentModel(Model):
         que_features = Extractor(que_inputs, que_mask)
         pro_features = Extractor(pro_inputs, pro_mask)
 
-        que_encoded = Encoder(que_features, middle_dim, latent_dim, [], [])
-        pro_encoded = Encoder(pro_features, middle_dim, latent_dim, [], [])
+        self.que_encoded = Encoder(que_features, middle_dim, latent_dim, [], [])
+        self.pro_encoded = Encoder(pro_features, middle_dim, latent_dim, [], [])
 
         dist = Lambda(lambda x: tf.reduce_sum(tf.square(x[0]-x[1]), axis = -1)) \
-            ([que_encoded, pro_encoded])
+            ([self.que_encoded, self.pro_encoded])
 
         outputs = Lambda(lambda x: tf.reshape(tf.exp(-x), (-1, 1)))(dist)
 
@@ -93,11 +93,11 @@ class DateModel(Model):
         que_features = Extractor(que_inputs, que_mask)
         pro_features = Extractor(pro_inputs, pro_mask)
         
-        que_encoded = Encoder(que_features, middle_dim, latent_dim, que_input_embs, que_output_embs)
-        pro_encoded = Encoder(pro_features, middle_dim, latent_dim, pro_input_embs, pro_output_embs)
+        self.que_encoded = Encoder(que_features, middle_dim, latent_dim, que_input_embs, que_output_embs)
+        self.pro_encoded = Encoder(pro_features, middle_dim, latent_dim, pro_input_embs, pro_output_embs)
         
         dist = Lambda(lambda x: tf.reduce_sum(tf.square(x[0]-x[1]), axis = -1)) \
-            ([que_encoded, pro_encoded])
+            ([self.que_encoded, self.pro_encoded])
         
         outputs = Lambda(lambda x: tf.reshape(tf.exp(-x), (-1, 1)))(dist)
         
@@ -134,10 +134,9 @@ class DoubleModel(Model):
         date_score = self.date_model([que_inputs, pro_inputs])
         
         score = date_score
-        # score = Concatenate()([content_score, date_score])
         
         # # Compute score
-        # score = Lambda(lambda x: (x[:, 0] + x[:, 1]) / 2)(score)
+        # score = Lambda(lambda x: (x[0] + x[1]) / 2)([content_score, date_score])
         # score = Reshape((1, ))(score)
         
         super().__init__([que_inputs, pro_inputs], score)

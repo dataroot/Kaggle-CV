@@ -86,18 +86,19 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         import pickle
         proc_path = 'proc_data/'
-        
-        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_que_data.npy', 'wb') as f:
+        prefix = ('train' if mode == 'Train' else 'test')
+
+        with open(proc_path + prefix + '_que_data.pkl', 'wb') as f:
             pickle.dump(que_data, f)
-        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_stu_data.npy', 'wb') as f:
+        with open(proc_path + prefix + '_stu_data.pkl', 'wb') as f:
             pickle.dump(stu_data, f)
-        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_pro_data.npy', 'wb') as f:
+        with open(proc_path + prefix + '_pro_data.pkl', 'wb') as f:
             pickle.dump(pro_data, f)
-        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_pos_pairs', 'wb') as f:
+        with open(proc_path + prefix + '_pos_pairs.pkl', 'wb') as f:
             pickle.dump(pos_pairs, f)
-        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_nonneg_pairs', 'wb') as f:
+        with open(proc_path + prefix + '_nonneg_pairs.pkl', 'wb') as f:
             pickle.dump(nonneg_pairs, f)
-        with open(proc_path + ('train' if mode == 'Train' else 'test') + '_pro_dates', 'wb') as f:
+        with open(proc_path + prefix + '_pro_dates.pkl', 'wb') as f:
             pickle.dump(pro_dates, f)
 
 

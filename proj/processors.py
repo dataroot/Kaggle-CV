@@ -269,7 +269,7 @@ class ProProc(BaseProc):
         df = pd.DataFrame([{**f, **{'professionals_id': id}} for (id, fs) in data.items() for f in fs])
 
         df = df.merge(pro, on='professionals_id') \
-            .merge(tags_grouped, how='left', left_on='professionals_id', right_on='tag_users_user_id')
+               .merge(tags_grouped, how='left', left_on='professionals_id', right_on='tag_users_user_id')
         # launch feature pre-processing
         self.preprocess(df)
 
