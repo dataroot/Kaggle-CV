@@ -90,6 +90,7 @@ class BatchGenerator(keras.utils.Sequence):
             que_data = self.que_feat[que]
 
             # find student's and professional's feature in current time
+
             stu_data = BatchGenerator.__find(self.stu_feat[stu], self.stu_time[stu], current_time)
             pro_data = BatchGenerator.__find(self.pro_feat[pro], self.pro_time[pro], current_time)
 
@@ -104,7 +105,7 @@ class BatchGenerator(keras.utils.Sequence):
         current_times = self.ss.transform(np.array(current_times).reshape(-1, 1))
         # and append them to both questions and professionals
         return np.vstack(x_que), np.vstack(x_pro)
-        # return np.hstack([np.vstack(x_que), current_times]), np.hstack([np.vstack(x_pro), current_times])
+        # return np.hstack([np.vstack(x_que), current_times]), np.vstack(x_pro)
 
     def __getitem__(self, index):
         """

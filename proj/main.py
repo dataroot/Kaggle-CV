@@ -77,9 +77,6 @@ def drive(data_path: str, dump_path: str, split_date: str):
         stu_data = stu_proc.transform(data['stu'], data['que'], data['ans'])
         print('Students: ', stu_data.shape)
 
-        with pd.option_context('display.max_columns', 100, 'display.width', 1024):
-            print(stu_data)
-
         pro_proc = ProProc(oblige_fit, dump_path)
         pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'], tag_pro)
         print('Professionals: ', pro_data.shape)
@@ -88,6 +85,11 @@ def drive(data_path: str, dump_path: str, split_date: str):
                             que_proc.pp['questions_date_added_time'], pro_dates)
         print('Batches:', len(bg))
 
+        with pd.option_context('display.max_columns', 100, 'display.width', 1024):
+            print(stu_data)
+            print(que_data)
+            print(pro_data)
+
         if mode == 'Train':
             # in train mode, build, compile train and save model
             model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2,
@@ -95,7 +97,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
                                que_input_embs=[102, 42], que_output_embs=[2, 2],
                                pro_dim=len(pro_data.columns) - 2,  ## 2-id,time; 1-currenttime
                                pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
-            model.compile(Adam(lr=0.002), loss='binary_crossentropy', metrics=['accuracy'])
+            model.compile(Adam(lr=0.005), loss='binary_crossentropy', metrics=['accuracy'])
             model.fit_generator(bg, epochs=10, verbose=2)
             model.save_weights(dump_path + 'model.h5')
         else:
@@ -104,7 +106,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
             print(f'Loss: {loss}, accuracy: {acc}')
 
         # dummy batch generator used to extract single big batch of data to calculate feature importance
-        bg = BatchGenerator(que_data, stu_data, pro_data, 512, pos_pairs, nonneg_pairs,
+        bg = BatchGenerator(que_data, stu_data, pro_data, 1024, pos_pairs, nonneg_pairs,
                             que_proc.pp['questions_date_added_time'], pro_dates)
 
         # dict with descriptions of feature names, used for visualization of feature importance
@@ -113,7 +115,6 @@ def drive(data_path: str, dump_path: str, split_date: str):
               'text': [f'que_emb_{i}' for i in range(10)] +
                       [f'pro_tag_emb_{i}' for i in range(10)] + [f'pro_ind_emb_{i}' for i in range(10)]}
 
-        print('Assert:', len(fn['que']), len(fn['pro']))
         print(bg[0][0][0].shape, bg[0][0][1].shape)
 
         # calculate and plot feature importance
