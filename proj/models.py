@@ -25,7 +25,7 @@ def Categorizer(x, emb_input_dims: list, emb_output_dims: list):
 
 def Encoder(x, middle_dim: int, output_dim: int, emb_input_dims: list, emb_output_dims: list):
     """
-   Computes latent space representation of x
+   Computes latent space representation
     """
     x = Categorizer(x, emb_input_dims, emb_output_dims)
     
@@ -36,7 +36,7 @@ def Encoder(x, middle_dim: int, output_dim: int, emb_input_dims: list, emb_outpu
 
 def Extractor(x, mask: np.ndarray):
     """
-    Extract columns whose indices are in or outside content_mask
+    Selects columns from mask
     """
     parts = []
     
