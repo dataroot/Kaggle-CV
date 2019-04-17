@@ -12,6 +12,7 @@ pd.options.mode.chained_assignment = None  # warning suppression
 
 
 # TODO: add regular expressions for HTML tags removal somewhere
+# TODO: make feature names shorter
 
 class QueProc(BaseProc):
     """

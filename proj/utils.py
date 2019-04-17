@@ -13,7 +13,7 @@ class TextProcessor:
 
     def __init__(self, path: str):
         """
-        :param path: path to stemmed.pkl file -
+        :param path: path to stemmed.pkl file
         serialized with pickle dict with mappings from raw word to stemmed version of it.
         Used to speed things up because NLTK's PorterStemmer is relatively slow
         """

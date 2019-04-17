@@ -3,7 +3,7 @@ import pandas as pd
 from doc2vec import pipeline as pipeline_d2v
 from processors import QueProc, StuProc, ProProc
 from generator import BatchGenerator
-from models import Mothership, Adam
+from models import DistanceModel, SimpleModel, ConcatModel, Adam
 from evaluation import permutation_importance, plot_fi
 
 
@@ -92,13 +92,18 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         if mode == 'Train':
             # in train mode, build, compile train and save model
-            model = Mothership(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2,
-                               ## 4-id,time; 1-currenttime
-                               que_input_embs=[102, 42], que_output_embs=[2, 2],
-                               pro_dim=len(pro_data.columns) - 2,  ## 2-id,time; 1-currenttime
-                               pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2], inter_dim=10)
+            model = DistanceModel(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2,
+                                  que_input_embs=[102, 42], que_output_embs=[2, 2],
+                                  pro_dim=len(pro_data.columns) - 2,
+                                  pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
+                                  inter_dim=16, output_dim=10)
+
             model.compile(Adam(lr=0.005), loss='binary_crossentropy', metrics=['accuracy'])
             model.fit_generator(bg, epochs=10, verbose=2)
+
+            model.compile(Adam(lr=0.0005), loss='binary_crossentropy', metrics=['accuracy'])
+            model.fit_generator(bg, epochs=10, verbose=2)
+
             model.save_weights(dump_path + 'model.h5')
         else:
             # in test mode just evaluate it
@@ -119,8 +124,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         # calculate and plot feature importance
         fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
-        print('TEST', fn)
-        plot_fi(fi, fn)
+        plot_fi(fi)
 
 
 if __name__ == '__main__':
