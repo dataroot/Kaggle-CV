@@ -14,7 +14,7 @@ class BaseProc(ABC):
     Class with implementation of basic preprocessors logic
     """
 
-    def __init__(self, oblige_fit, path=''):
+    def __init__(self, oblige_fit, path):
         """
         :param oblige_fit: whether it is necessary to fit new preprocessor even if the one exists in preprocessors.pkl
         :param path: path to all the data

@@ -2,11 +2,11 @@ import pickle
 
 import pandas as pd
 import numpy as np
+from gensim.models import Doc2Vec
+from tqdm import tqdm
 
 from baseproc import BaseProc
 from utils import Averager
-
-from tqdm import tqdm
 
 pd.options.mode.chained_assignment = None  # warning suppression
 
@@ -24,6 +24,8 @@ class QueProc(BaseProc):
 
         with open(path + 'tags_embs.pkl', 'rb') as file:
             self.embs = pickle.load(file)
+
+        self.d2v = Doc2Vec.load(path + 'questions.d2v')
 
         self.features = {
             'categorical': [],
@@ -54,7 +56,7 @@ class QueProc(BaseProc):
 
         # prepare tag embeddings
 
-        emb_len = list(self.embs.values())[0].shape[0]
+        tag_emb_len = list(self.embs.values())[0].shape[0]
 
         def __convert(s):
             embs = []
@@ -62,17 +64,29 @@ class QueProc(BaseProc):
                 if tag in self.embs:
                     embs.append(self.embs[tag])
             if len(embs) == 0:
-                embs.append(np.zeros(emb_len))
+                embs.append(np.zeros(tag_emb_len))
             return np.vstack(embs).mean(axis=0)
 
         mean_embs = df['tags_tag_name'].apply(__convert)
+
+        emb_len = len(self.d2v.infer_vector([]))
+
+        def __infer(s):
+            self.d2v.random.seed(0)
+            return self.d2v.infer_vector(s.split(), steps=100)
+
+        df['questions_all'] = df['questions_title'] + ' ' + df['questions_body']
+        que_embs = df['questions_all'].apply(__infer)
 
         # re-order the columns
         df = df[['questions_id', 'questions_time'] + self.features['all']]
 
         # append tag embeddings
+        # for i in range(tag_emb_len):
+        #     df[f'que_tag_emb_{i}'] = mean_embs.apply(lambda x: x[i])
+
         for i in range(emb_len):
-            df[f'que_tag_emb_{i}'] = mean_embs.apply(lambda x: x[i])
+            df[f'que_emb_{i}'] = que_embs.apply(lambda x: x[i])
 
         return df
 

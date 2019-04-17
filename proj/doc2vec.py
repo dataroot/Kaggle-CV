@@ -84,8 +84,8 @@ def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.D
     df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
 
     # train and save question's tags embeddings
-    d2v = train(df, 'tags_tag_name', features, dim)
-    save(d2v, path + 'tags')
+    # d2v = train(df, 'tags_tag_name', features, dim)
+    # save(d2v, path + 'tags')
 
     # aggregate all the tags in one string for same questions
     que_tags = que_tags[['questions_id', 'tags_tag_name']].groupby(by='questions_id', as_index=False) \
@@ -97,5 +97,9 @@ def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.D
     df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
 
     # train and save professional's industries embeddings
-    d2v = train(df, 'professionals_industry', features, dim)
-    save(d2v, path + 'industries')
+    # d2v = train(df, 'professionals_industry', features, dim)
+    # save(d2v, path + 'industries')
+
+    que_tags['questions_all'] = que_tags['questions_title'] + ' ' + que_tags['questions_body']
+    d2v = train(que_tags, 'questions_id', ['questions_all'], 5)
+    save(d2v, path + 'questions')
