@@ -18,7 +18,7 @@ class QueProc(BaseProc):
     Questions data preprocessor
     """
 
-    def __init__(self, oblige_fit, path=''):
+    def __init__(self, oblige_fit, path):
         super().__init__(oblige_fit, path)
 
         with open(path + 'tags_embs.pkl', 'rb') as file:
@@ -27,15 +27,13 @@ class QueProc(BaseProc):
         self.features = {
             'categorical': [],
             'numerical': {
-                'zero': ['questions_body_length'],
+                'zero': ['questions_body_length', 'questions_tag_count'],
                 'mean': []
             },
             'date': []  # ['questions_date_added']
         }
 
         self._unroll_features()
-
-    # TODO: add number of tags feature
 
     def transform(self, que, tags):
         # process tags
@@ -46,7 +44,8 @@ class QueProc(BaseProc):
 
         # append aggregated tags to each question
         tags_grouped = tags.groupby('tag_questions_question_id', as_index=False)[['tags_tag_name']] \
-            .aggregate(lambda x: ' '.join(set(x)))
+            .agg(lambda x: ' '.join(set(x)))
+        tags_grouped['questions_tag_count'] = tags_grouped['tags_tag_name'].apply(lambda x: len(x.split()))
         df = que.merge(tags_grouped, how='left', left_on='questions_id', right_on='tag_questions_question_id')
 
         # launch feature pre-processing
@@ -84,7 +83,7 @@ class StuProc(BaseProc):
     Students data preprocessor
     """
 
-    def __init__(self, oblige_fit, path=''):
+    def __init__(self, oblige_fit, path):
         super().__init__(oblige_fit, path)
 
         self.features = {
@@ -99,7 +98,6 @@ class StuProc(BaseProc):
 
         self._unroll_features()
 
-    # TODO: add average number of likes feature
     # TODO: add average time between questions
     # TODO: add average questions age
 
@@ -122,6 +120,8 @@ class StuProc(BaseProc):
         # stack two DataFrame to form resulting one for iteration
         df = pd.concat([que_change, ans_change], ignore_index=True).sort_values('students_time')
 
+        # data is a dist with mapping from student's id to his list of features
+        # each list contains dicts with mapping from feature name to its value on a particular moment
         data = {}
         avgs = {}
 
@@ -162,8 +162,6 @@ class StuProc(BaseProc):
             data[cur_stu].append(new)
 
         # construct a DataFrame out of dict of list of feature dicts
-        # data is a dist with mapping from student's id to his list of features
-        # each list contains dicts with mapping from feature name to its value on a particular moment
         df = pd.DataFrame([{**f, **{'students_id': id}} for (id, fs) in data.items() for f in fs])
 
         df = df.merge(stu, on='students_id')
@@ -181,7 +179,7 @@ class ProProc(BaseProc):
     Professionals data preprocessor
     """
 
-    def __init__(self, oblige_fit, path=''):
+    def __init__(self, oblige_fit, path):
         super().__init__(oblige_fit, path)
 
         with open(path + 'tags_embs.pkl', 'rb') as file:
@@ -203,12 +201,8 @@ class ProProc(BaseProc):
 
         self._unroll_features()
 
-    # TODO: add email activated
     # TODO: add average question age
     # TODO: add average time between answers
-    # TODO: add average number of likes
-    # TODO: add average difference between likes of question and answer
-    # TODO: add averaged subscribed tag embedding
 
     def transform(self, pro, que, ans, tags) -> pd.DataFrame:
         tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))

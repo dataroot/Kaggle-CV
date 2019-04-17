@@ -112,13 +112,14 @@ def drive(data_path: str, dump_path: str, split_date: str):
         # dict with descriptions of feature names, used for visualization of feature importance
         fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]),  # + ['que_current_time'],
               "pro": list(pro_data.columns[2:]),  # + ['pro_current_time'],
-              'text': [f'que_emb_{i}' for i in range(10)] +
+              'text': [f'que_tag_emb_{i}' for i in range(10)] +
                       [f'pro_tag_emb_{i}' for i in range(10)] + [f'pro_ind_emb_{i}' for i in range(10)]}
 
         print(bg[0][0][0].shape, bg[0][0][1].shape)
 
         # calculate and plot feature importance
         fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
+        print('TEST', fn)
         plot_fi(fi, fn)
 
 
