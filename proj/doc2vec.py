@@ -2,60 +2,81 @@ import random
 import pickle
 
 import pandas as pd
-
-from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 from matplotlib import pyplot as plt
 from sklearn.manifold import TSNE
 
 from utils import TextProcessor
 
+from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 from gensim.corpora import Dictionary
 from gensim.models import TfidfModel
-from gensim.models.ldamodel import LdaModel
+from gensim.models.ldamulticore import LdaMulticore
 
 
-def train(df: pd.DataFrame, target: str, features: list, dim: int) -> (Dictionary, TfidfModel, LdaModel):
+def train(df: pd.DataFrame, target: str, features: list, dim: int) -> Doc2Vec:
     """
-    Train LdaModel object on provided data
+    Train Doc2Vec object on provided data
+    :param df: data to work with
+    :param target: column name of target entity in df to train embeddings for
+    :param features: list of feature names to be used for training
+    :param dim: dimension of embedding vectors to train
+    :return: trained Doc2Vec object
+    """
+    prepared = []
+    for feature in features:
+        if feature != target:
+            prepared += [TaggedDocument(row[feature].split(), [row[target]])
+                         for i, row in df[[feature, target]].drop_duplicates().iterrows()]
+        else:
+            prepared += [TaggedDocument(s.split(), [s]) for s in df[target].drop_duplicates()]
+    # shuffle prepared data, just in case
+    prepared = random.sample(prepared, len(prepared))
+    return Doc2Vec(prepared, vector_size=dim, workers=4, epochs=10, dm=0)
+
+
+def save(d2v: Doc2Vec, prefix: str):
+    """
+    Serialize dict with mapping from entity to it's doc2vec embedding
+    and save Doc2Vec object itself
+    """
+    d2v.save(prefix + '.d2v')
+    docvecs = {d2v.docvecs.index2entity[i]: d2v.docvecs.vectors_docs[i]
+               for i in range(len(d2v.docvecs.index2entity))}
+    with open(prefix + '_embs.pkl', 'wb') as file:
+        pickle.dump(docvecs, file)
+
+
+def train_lda(df: pd.DataFrame, target: str, features: list, dim: int) -> (Dictionary, TfidfModel, LdaMulticore):
+    """
+    Train LdaMulticore model on provided data
 
     :param df: data to work with
     :param target: column name of target entity in df to train embeddings for
     :param features: list of feature names to be used for training
     :param dim: dimension of embedding vectors to train
-    :return: trained LdaModel object
+    :return: trained LdaMulticore model
     """
-    # Gensim Dictionary
-    extremes_no_below = 10
-    extremes_no_above = 0.6
-    extremes_keep_n = 8000
-
-    # LDA
-    num_topics = dim  # 18
-    passes = 20
-    chunksize = 1000
-    alpha = 1/50
-    seed = 0
-
     lda_tokens = df[features[0]].apply(lambda x: x.split())
 
-    # Gensim Dictionary
+    # create Dictionary and train it on text corpus
     lda_dic = Dictionary(lda_tokens)
-    lda_dic.filter_extremes(no_below=extremes_no_below, no_above=extremes_no_above, keep_n=extremes_keep_n)
+    lda_dic.filter_extremes(no_below=10, no_above=0.6, keep_n=8000)
     lda_corpus = [lda_dic.doc2bow(doc) for doc in lda_tokens]
-
+    
+    # create TfidfModel and train it on text corpus 
     lda_tfidf = TfidfModel(lda_corpus)
     lda_corpus = lda_tfidf[lda_corpus]
     
-    # Create LDA Model
-    lda_model = LdaModel(lda_corpus, num_topics=num_topics, 
-                         id2word=lda_dic, passes=passes,
-                         chunksize=chunksize,update_every=0,
-                         alpha=alpha, random_state=seed)
+    # create LDA Model and train it on text corpus
+    lda_model = LdaMulticore(
+        lda_corpus, num_topics=dim, id2word=lda_dic, workers=4,
+        passes=20, chunksize=1000, alpha=0.02, random_state=0
+    )
     
     return lda_dic, lda_tfidf, lda_model
 
 
-def save(lda_dic: Dictionary, lda_tfidf:TfidfModel, lda_model: LdaModel, prefix: str):
+def save_lda(lda_dic: Dictionary, lda_tfidf:TfidfModel, lda_model: LdaMulticore, prefix: str):
     """
     Serialize dict with mapping from entity to it's doc2vec embedding
     and save Doc2Vec object itself
@@ -123,6 +144,9 @@ def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.D
 
     que_tags['questions_whole'] = que_tags['questions_title'] + ' ' + que_tags['questions_body']
 
-    lda_dic, lda_tfidf, lda_model = train(que_tags, 'questions_id', ['questions_whole'], 18)
-    save(lda_dic, lda_tfidf, lda_model, path + 'questions')
+    d2v = train(que_tags, 'questions_id', ['questions_whole'], 5)
+    save(d2v, path + 'questions')
+
+    lda_dic, lda_tfidf, lda_model = train_lda(que_tags, 'questions_id', ['questions_whole'], 5)
+    save_lda(lda_dic, lda_tfidf, lda_model, path + 'questions')
 
