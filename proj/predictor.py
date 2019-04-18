@@ -23,7 +23,7 @@ class Predictor:
         self.model = model
 
         # form question-student pairs dataframe
-        with open(path + 'pairs.pkl', 'rb') as file:
+        with open(path + 'que_stu_pairs.pkl', 'rb') as file:
             pairs = pickle.load(file)
 
         # load datasets with preprocessed features
@@ -32,27 +32,25 @@ class Predictor:
         stu_data = pd.read_hdf(store, 'stu')
         pro_data = pd.read_hdf(store, 'pro')
 
-        que_dict = {row.values[0]: row.values[2:] for i, row in que_data.iterrows()}
+        self.que_dict = {row.values[0]: row.values[2:] for i, row in que_data.iterrows()}
         self.stu_dict = {stu: group.values[-1, 2:] for stu, group in stu_data.groupby('students_id')}
-        pro_dict = {pro: group.values[-1, 2:] for pro, group in pro_data.groupby('professionals_id')}
+        self.pro_dict = {pro: group.values[-1, 2:] for pro, group in pro_data.groupby('professionals_id')}
 
         que_feat, que_ids, pro_feat, pro_ids = [], [], [], []
 
-        ques_stus = {(que, stu) for que, stu, pro, t in pairs}
-        pros = {pro for que, stu, pro, t in pairs}
+        for que in self.que_dict.keys():
+            cur_stu = pairs[que]
+            if cur_stu in self.stu_dict:
+                que_feat.append(np.hstack([self.stu_dict[cur_stu], self.que_dict[que]]))
+                que_ids.append(que)
 
-        for que, stu in ques_stus:
-            que_feat.append(np.hstack([que_dict[que], self.stu_dict[stu]]))
-            que_ids.append(que)
-
-        for pro in pros:
-            pro_feat.append(pro_dict[pro])
+        for pro in self.pro_dict.keys():
+            pro_feat.append(self.pro_dict[pro])
             pro_ids.append(pro)
 
-        pro_feat = np.vstack(pro_feat)
-        self.pros_ids = np.vstack(pro_ids)
-
-        que_feat = np.vstack(que_feat)
+        self.pro_feat = np.vstack(pro_feat)
+        self.pro_ids = np.vstack(pro_ids)
+        self.que_feat = np.vstack(que_feat)
         self.que_ids = np.vstack(que_ids)
 
         # create two encoders
@@ -60,132 +58,89 @@ class Predictor:
         self.pro_model = model.pro_model
 
         # compute latent vectors for questions and professionals
-        que_lat_vecs = self.que_model.predict(que_feat)
-        pro_lat_vecs = self.pro_model.predict(pro_feat)
+        self.que_lat_vecs = self.que_model.predict(self.que_feat)
+
+        print(self.pro_feat[2637])
+        self.pro_lat_vecs = self.pro_model.predict(self.pro_feat)
+        print(self.pro_lat_vecs[2637])
 
         # create two KNN trees consisting of question and professional latent vectors
-        self.que_tree = KDTree(que_lat_vecs)
-        self.pro_tree = KDTree(pro_lat_vecs)
+        self.que_tree = KDTree(self.que_lat_vecs)
+        self.pro_tree = KDTree(self.pro_lat_vecs)
 
         # initialize QueProc and ProProc
         self.que_proc = QueProc(oblige_fit=False, path=path)
         self.pro_proc = ProProc(oblige_fit=False, path=path)
 
-    def find_pros_by_que(self, que_df: pd.DataFrame, que_tags: pd.DataFrame, top: int = 10) -> pd.DataFrame:
-        """
-        Returns top professionals for given questions
-        :param que_df: DataFrame of question data
-        :param que_tags: DataFrame of question tags
-        :param top: how many top professionals to return
-        :param expand: whether to add professional data to returned DataFrame
-        """
+    def __get_que_latent(self, que_df: pd.DataFrame, que_tags: pd.DataFrame):
         que_df['questions_date_added'] = pd.to_datetime(que_df['questions_date_added'])
 
-        # prepare question features and add them to student features
         que_feat = self.que_proc.transform(que_df, que_tags).values[:, 2:]
+
         stu_feat = np.vstack([self.stu_dict[stu] for stu in que_df['questions_author_id']])
-
-        # print(stu_feat, que_feat)
-
         que_feat = np.hstack([stu_feat, que_feat])
 
-        # get top professionals for questions
-        que_lat_vecs = self.que_model.predict(que_feat)
-        # print(que_lat_vecs)
+        lat_vecs = self.que_model.predict(que_feat)
 
-        dists, pros = self.pro_tree.query(que_lat_vecs, k=top)
-        pros = self.pros_ids[pros]
-        scores = np.exp(-dists)
-        ques = que_df['questions_id'].values
+        return lat_vecs
 
-        # create question-professional-score tuples
+    def __get_pro_latent(self, pro_df: pd.DataFrame, que_df: pd.DataFrame, ans_df: pd.DataFrame,
+                         pro_tags: pd.DataFrame):
+        pro_df['professionals_date_joined'] = pd.to_datetime(pro_df['professionals_date_joined'])
+        que_df['questions_date_added'] = pd.to_datetime(que_df['questions_date_added'])
+        ans_df['answers_date_added'] = pd.to_datetime(que_df['questions_date_added'])
+
+        pro_feat = self.pro_proc.transform(pro_df, que_df, ans_df, pro_tags)
+        pro_feat = pro_feat.groupby('professionals_id').last().values[:, 1:]
+
+        print(pro_feat)
+        lat_vecs = self.pro_model.predict(pro_feat)
+        print(lat_vecs)
+
+        return lat_vecs
+
+    @staticmethod
+    def __construct_df(ids, sims, scores):
         tuples = []
-        for i, que in enumerate(ques):
-            for j, pro in enumerate(pros[i]):
-                tuples.append((que, pro, scores[i, j]))
-
-        # create DataFrame from tuples
-        score_df = pd.DataFrame(tuples, columns=['questions_id', 'professionals_id', 'professionals_score'])
-
+        for i, id in enumerate(ids):
+            for j, sim_que in enumerate(sims[i]):
+                tuples.append((id, sim_que, scores[i, j]))
+        score_df = pd.DataFrame(tuples, columns=['id', 'match_id', 'match_score'])
         return score_df
+
+    def __get_ques_by_latent(self, ids, lat_vecs, top):
+        dists, ques = self.que_tree.query(lat_vecs, k=top)
+        ques = self.que_ids[ques]
+        scores = np.exp(-dists)
+        return Predictor.__construct_df(ids, ques, scores)
+
+    def __get_pros_by_latent(self, ids, lat_vecs, top):
+        dists, pros = self.pro_tree.query(lat_vecs, k=top)
+        pros = self.pro_ids[pros]
+        scores = np.exp(-dists)
+        return Predictor.__construct_df(ids, pros, scores)
+
+    def find_pros_by_que(self, que_df: pd.DataFrame, que_tags: pd.DataFrame, top: int = 10) -> pd.DataFrame:
+        lat_vecs = self.__get_que_latent(que_df, que_tags)
+        return self.__get_pros_by_latent(que_df['questions_id'].values, lat_vecs, top)
 
     def find_ques_by_que(self, que_df: pd.DataFrame, que_tags: pd.DataFrame, top: int = 10) -> pd.DataFrame:
-        """
-        Returns top similar questions for given questions
-        :param que_df: DataFrame of question data
-        :param que_tags: DataFrame of question tags
-        :param top: how many top professionals to return
-        :param expand: whether to add professional data to returned DataFrame
-        """
-        que_df['questions_date_added'] = pd.to_datetime(que_df['questions_date_added'])
-
-        # prepare student features
-
-        # prepare question features and add them to student features
-        que_feat = self.que_proc.transform(que_df, que_tags).values[:, 2:]
-        stu_feat = np.vstack([self.stu_dict[stu] for stu in que_df['questions_author_id']])
-
-        # print(stu_feat, que_feat)
-
-        que_feat = np.hstack([stu_feat, que_feat])
-
-        # get top similar questions for initial questions
-        que_lat_vecs = self.que_model.predict(que_feat)
-        # print(que_lat_vecs)
-
-        dists, sim_ques = self.que_tree.query(que_lat_vecs, k=top)
-        sim_ques = self.que_ids[sim_ques]
-        scores = np.exp(-dists)
-        ques = que_df['questions_id'].values
-
-        # create question-similar_question-score tuples
-        tuples = []
-        for i, que in enumerate(ques):
-            for j, sim_que in enumerate(sim_ques[i]):
-                tuples.append((que, sim_que, scores[i, j]))
-
-        # create DataFrame from tuples
-        score_df = pd.DataFrame(tuples, columns=['initial_questions_id', 'questions_id', 'questions_score'])
-
-        return score_df
+        lat_vecs = self.__get_que_latent(que_df, que_tags)
+        return self.__get_ques_by_latent(que_df['questions_id'].values, lat_vecs, top)
 
     # TODO: consider professionals which are already in base
 
     def find_ques_by_pro(self, pro_df: pd.DataFrame, que_df: pd.DataFrame, ans_df: pd.DataFrame,
                          pro_tags: pd.DataFrame, top: int = 10) -> pd.DataFrame:
-        """
-        Returns top questions for given professionals
-        :param pro_df: DataFrame of professional data
-        :param que_df:
-        :param ans_df:
-        :param pro_tags: DataFrame of professional subscribed tags
-        :param top: how many top professionals to return
-        :param expand: whether to add professional data to returned DataFrame
-        """
-        pro_df['professionals_date_joined'] = pd.to_datetime(pro_df['professionals_date_joined'])
-        que_df['questions_date_added'] = pd.to_datetime(que_df['questions_date_added'])
-        ans_df['answers_date_added'] = pd.to_datetime(que_df['questions_date_added'])
+        lat_vecs = self.__get_pro_latent(pro_df, que_df, ans_df, pro_tags)
+        return self.__get_ques_by_latent(pro_df['professionals_id'].values, lat_vecs, top)
 
-        # prepare professional features
-        pro_feat = self.pro_proc.transform(pro_df, que_df, ans_df, pro_tags).values[:, 2:]
+    def find_pros_by_pro(self, pro_df: pd.DataFrame, que_df: pd.DataFrame, ans_df: pd.DataFrame,
+                         pro_tags: pd.DataFrame, top: int = 10) -> pd.DataFrame:
+        lat_vecs = self.__get_pro_latent(pro_df, que_df, ans_df, pro_tags)
+        return self.__get_pros_by_latent(pro_df['professionals_id'].values, lat_vecs, top)
 
-        # get top questions for professionals
-        pro_lat_vecs = self.pro_model.predict(pro_feat)
-        dists, ques = self.que_tree.query(pro_lat_vecs, k=top)
-        ques = self.que_ids[ques]
-        scores = np.exp(-dists)
-        pros = pro_df['professionals_id'].values
-
-        # create professional-question-score tuples
-        tuples = []
-        for i, pro in enumerate(pros):
-            for j, que in enumerate(ques[i]):
-                tuples.append((pro, que, scores[i, j]))
-
-        # create DataFrame from tuples
-        score_df = pd.DataFrame(tuples, columns=['professionals_id', 'questions_id', 'questions_score'])
-
-        return score_df
+    # TODO: refactor this
 
     @staticmethod
     def convert_que_dict(que_dict: dict) -> (pd.DataFrame, pd.DataFrame):

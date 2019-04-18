@@ -34,6 +34,13 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
         print(var, train[var].shape, test[var].shape)
 
+    with open(dump_path + 'que_stu_pairs.pkl', 'wb') as file:
+        tmp = {row['questions_id']: row['questions_author_id'] for i, row in test['que'].iterrows()}
+        print(tmp)
+        pickle.dump(tmp, file)
+
+    return
+
     tags = pd.read_csv(data_path + 'tags.csv')
     tag_que = pd.read_csv(data_path + 'tag_questions.csv') \
         .merge(tags, left_on='tag_questions_tag_id', right_on='tags_tag_id')
@@ -93,9 +100,6 @@ def drive(data_path: str, dump_path: str, split_date: str):
             que_data.to_hdf(store, 'que')
             stu_data.to_hdf(store, 'stu')
             pro_data.to_hdf(store, 'pro')
-
-            with open(dump_path + 'pairs.pkl', 'wb') as file:
-                pickle.dump(nonneg_pairs, file)
 
         bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs,
                             que_proc.pp['questions_date_added_time'], pro_dates)
