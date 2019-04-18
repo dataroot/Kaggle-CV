@@ -1,3 +1,5 @@
+import pickle
+
 import pandas as pd
 
 from doc2vec import pipeline as pipeline_d2v
@@ -85,6 +87,16 @@ def drive(data_path: str, dump_path: str, split_date: str):
         pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'], tag_pro)
         print('Professionals: ', pro_data.shape)
 
+        # save all the useful data
+        if mode == 'Test':
+            store = pd.HDFStore(dump_path + 'processed.h5', 'w')
+            que_data.to_hdf(store, 'que')
+            stu_data.to_hdf(store, 'stu')
+            pro_data.to_hdf(store, 'pro')
+
+            with open(dump_path + 'pairs.pkl', 'wb') as file:
+                pickle.dump(nonneg_pairs, file)
+
         bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs,
                             que_proc.pp['questions_date_added_time'], pro_dates)
         print('Batches:', len(bg))
@@ -99,6 +111,9 @@ def drive(data_path: str, dump_path: str, split_date: str):
                                   inter_dim=16, output_dim=10)
 
             model.compile(Adam(lr=0.005), loss='binary_crossentropy', metrics=['accuracy'])
+            model.fit_generator(bg, epochs=10, verbose=2)
+
+            model.compile(Adam(lr=0.0005), loss='binary_crossentropy', metrics=['accuracy'])
             model.fit_generator(bg, epochs=10, verbose=2)
 
             model.save_weights(dump_path + 'model.h5')
