@@ -9,39 +9,60 @@ from sklearn.manifold import TSNE
 
 from utils import TextProcessor
 
+from gensim.corpora import Dictionary
+from gensim.models import TfidfModel
+from gensim.models.ldamodel import LdaModel
 
-def train(df: pd.DataFrame, target: str, features: list, dim: int) -> Doc2Vec:
+
+def train(df: pd.DataFrame, target: str, features: list, dim: int) -> (Dictionary, TfidfModel, LdaModel):
     """
-    Train Doc2Vec object on provided data
+    Train LdaModel object on provided data
 
     :param df: data to work with
     :param target: column name of target entity in df to train embeddings for
     :param features: list of feature names to be used for training
     :param dim: dimension of embedding vectors to train
-    :return: trained Doc2Vec object
+    :return: trained LdaModel object
     """
-    prepared = []
-    for feature in features:
-        if feature != target:
-            prepared += [TaggedDocument(row[feature].split(), [row[target]])
-                         for i, row in df[[feature, target]].drop_duplicates().iterrows()]
-        else:
-            prepared += [TaggedDocument(s.split(), [s]) for s in df[target].drop_duplicates()]
-    # shuffle prepared data, just in case
-    prepared = random.sample(prepared, len(prepared))
-    return Doc2Vec(prepared, vector_size=dim, workers=4, epochs=10, dm=0)
+    # Gensim Dictionary
+    extremes_no_below = 10
+    extremes_no_above = 0.6
+    extremes_keep_n = 8000
+
+    # LDA
+    num_topics = dim  # 18
+    passes = 20
+    chunksize = 1000
+    alpha = 1/50
+    seed = 0
+
+    lda_tokens = df[features[0]].apply(lambda x: x.split())
+
+    # Gensim Dictionary
+    lda_dic = Dictionary(lda_tokens)
+    lda_dic.filter_extremes(no_below=extremes_no_below, no_above=extremes_no_above, keep_n=extremes_keep_n)
+    lda_corpus = [lda_dic.doc2bow(doc) for doc in lda_tokens]
+
+    lda_tfidf = TfidfModel(lda_corpus)
+    lda_corpus = lda_tfidf[lda_corpus]
+    
+    # Create LDA Model
+    lda_model = LdaModel(lda_corpus, num_topics=num_topics, 
+                         id2word=lda_dic, passes=passes,
+                         chunksize=chunksize,update_every=0,
+                         alpha=alpha, random_state=seed)
+    
+    return lda_dic, lda_tfidf, lda_model
 
 
-def save(d2v: Doc2Vec, prefix: str):
+def save(lda_dic: Dictionary, lda_tfidf:TfidfModel, lda_model: LdaModel, prefix: str):
     """
     Serialize dict with mapping from entity to it's doc2vec embedding
     and save Doc2Vec object itself
     """
-    d2v.save(prefix + '.d2v')
-    docvecs = {d2v.docvecs.index2entity[i]: d2v.docvecs.vectors_docs[i]
-               for i in range(len(d2v.docvecs.index2entity))}
-    with open(prefix + '_embs.pkl', 'wb') as file:
-        pickle.dump(docvecs, file)
+    lda_dic.save(prefix + '.lda_dic')
+    lda_tfidf.save(prefix + '.lda_tfidf')
+    lda_model.save(prefix + '.lda_model')
 
 
 def vis(d2v: Doc2Vec):
@@ -49,7 +70,7 @@ def vis(d2v: Doc2Vec):
     Visualize with T-SNE embeddings trained with doc2vec
     """
     proj = TSNE(n_components=2, verbose=1).fit_transform(d2v.docvecs.vectors_docs)
-    fig, ax = plt.subplots(figsize=(60, 60))
+    _, ax = plt.subplots(figsize=(60, 60))
     plt.scatter(proj[:, 0], proj[:, 1], alpha=0.5)
     for i, name in enumerate(d2v.docvecs.index2entity):
         ax.annotate(name, (proj[i, 0], proj[i, 1]))
@@ -100,6 +121,8 @@ def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.D
     # d2v = train(df, 'professionals_industry', features, dim)
     # save(d2v, path + 'industries')
 
-    que_tags['questions_all'] = que_tags['questions_title'] + ' ' + que_tags['questions_body']
-    d2v = train(que_tags, 'questions_id', ['questions_all'], 5)
-    save(d2v, path + 'questions')
+    que_tags['questions_whole'] = que_tags['questions_title'] + ' ' + que_tags['questions_body']
+
+    lda_dic, lda_tfidf, lda_model = train(que_tags, 'questions_id', ['questions_whole'], 18)
+    save(lda_dic, lda_tfidf, lda_model, path + 'questions')
+

@@ -41,7 +41,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
     print('tag_pro', tag_pro.shape)
 
     # calculate and save tag and industry embeddings on train data
-    pipeline_d2v(train['que'], train['ans'], train['pro'], tag_que, 10, dump_path)
+    # pipeline_d2v(train['que'], train['ans'], train['pro'], tag_que, 10, dump_path)
 
     nonneg_pairs = []
     for mode, data in [('Train', train), ('Test', test)]:

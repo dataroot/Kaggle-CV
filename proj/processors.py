@@ -10,6 +10,10 @@ from utils import Averager
 
 pd.options.mode.chained_assignment = None  # warning suppression
 
+from gensim.corpora import Dictionary
+from gensim.models import TfidfModel
+from gensim.models.ldamodel import LdaModel
+from utils import TextProcessor
 
 # TODO: add regular expressions for HTML tags removal somewhere
 # TODO: make feature names shorter
@@ -25,7 +29,10 @@ class QueProc(BaseProc):
         with open(path + 'tags_embs.pkl', 'rb') as file:
             self.embs = pickle.load(file)
 
-        self.d2v = Doc2Vec.load(path + 'questions.d2v')
+        self.tp = TextProcessor(path)
+        self.lda_dic = Dictionary.load(path + 'questions.lda_dic')
+        self.lda_tfidf = TfidfModel.load(path + 'questions.lda_tfidf')
+        self.lda_model = LdaModel.load(path + 'questions.lda_model')
 
         self.features = {
             'categorical': [],
@@ -69,14 +76,18 @@ class QueProc(BaseProc):
 
         mean_embs = df['tags_tag_name'].apply(__convert)
 
-        emb_len = len(self.d2v.infer_vector([]))
+        emb_len = len(self.lda_model[[]])
+        print("LDA embedding length:", emb_len)
 
-        def __infer(s):
-            self.d2v.random.seed(0)
-            return self.d2v.infer_vector(s.split(), steps=100)
+        lda_tokens = df['questions_title'] + ' ' + df['questions_body']
+        lda_tokens = lda_tokens.apply(self.tp.process, allow_stopwords=False)
+        lda_tokens = lda_tokens.apply(lambda s: s.split())
 
-        df['questions_all'] = df['questions_title'] + ' ' + df['questions_body']
-        que_embs = df['questions_all'].apply(__infer)
+        lda_corpus = [self.lda_dic.doc2bow(doc) for doc in lda_tokens]
+        lda_corpus = self.lda_tfidf[lda_corpus]
+
+        que_embs = self.lda_model.inference(lda_corpus)[0]
+        print("LDA question embeddings shape:", que_embs.shape)
 
         # re-order the columns
         df = df[['questions_id', 'questions_time'] + self.features['all']]
@@ -86,7 +97,8 @@ class QueProc(BaseProc):
         #     df[f'que_tag_emb_{i}'] = mean_embs.apply(lambda x: x[i])
 
         for i in range(emb_len):
-            df[f'que_emb_{i}'] = que_embs.apply(lambda x: x[i])
+            df[f'que_emb_{i}'] = que_embs[:, i]
+        print("Done!")
 
         return df
 
