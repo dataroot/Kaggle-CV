@@ -73,6 +73,7 @@ class QueProc(BaseProc):
 
         def __infer(s):
             self.d2v.random.seed(0)
+            s = self.tp.process(s)
             return self.d2v.infer_vector(s.split(), steps=100)
 
         df['questions_all'] = df['questions_title'] + ' ' + df['questions_body']
@@ -82,8 +83,8 @@ class QueProc(BaseProc):
         df = df[['questions_id', 'questions_time'] + self.features['all']]
 
         # append tag embeddings
-        # for i in range(tag_emb_len):
-        #     df[f'que_tag_emb_{i}'] = mean_embs.apply(lambda x: x[i])
+        for i in range(tag_emb_len):
+            df[f'que_tag_emb_{i}'] = mean_embs.apply(lambda x: x[i])
 
         for i in range(emb_len):
             df[f'que_emb_{i}'] = que_embs.apply(lambda x: x[i])
@@ -140,7 +141,7 @@ class StuProc(BaseProc):
         data = {}
         avgs = {}
 
-        for i, row in tqdm(df.iterrows(), desc="Students features"):
+        for i, row in df.iterrows():
             cur_stu = row['students_id']
 
             # default case, student's feature values before he left any questions
@@ -237,7 +238,7 @@ class ProProc(BaseProc):
             .sort_values('answers_date_added')
         data = {}
 
-        for i, row in tqdm(df.iterrows(), desc="Professionals features"):
+        for i, row in df.iterrows():
             cur_pro = row['professionals_id']
 
             # default case, professional's feature values before he left any questions
