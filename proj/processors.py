@@ -33,7 +33,7 @@ class QueProc(BaseProc):
                 'zero': ['questions_body_length', 'questions_tag_count'],
                 'mean': []
             },
-            'date': []  # ['questions_date_added']
+            'date': ['questions_date_added']
         }
 
         self._unroll_features()
@@ -109,7 +109,7 @@ class StuProc(BaseProc):
                 'mean': ['students_average_question_body_length', 'students_average_answer_body_length',
                          'students_average_answer_amount']
             },
-            'date': []  # ['students_date_joined', 'students_previous_question_time']
+            'date': ['students_date_joined', 'students_previous_question_time']
         }
 
         self._unroll_features()
@@ -212,7 +212,7 @@ class ProProc(BaseProc):
                 'mean': ['professionals_average_question_body_length',
                          'professionals_average_answer_body_length']
             },
-            'date': []  # ['professionals_date_joined', 'professionals_previous_answer_date']
+            'date': ['professionals_date_joined', 'professionals_previous_answer_date']
         }
 
         self._unroll_features()

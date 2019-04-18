@@ -101,5 +101,5 @@ def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.D
     # save(d2v, path + 'industries')
 
     que_tags['questions_all'] = que_tags['questions_title'] + ' ' + que_tags['questions_body']
-    d2v = train(que_tags, 'questions_id', ['questions_all'], 10)
-    save(d2v, path + 'questions')
+    # d2v = train(que_tags, 'questions_id', ['questions_all'], 10)
+    # save(d2v, path + 'questions')
