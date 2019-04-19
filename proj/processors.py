@@ -2,17 +2,17 @@ import pickle
 
 import pandas as pd
 import numpy as np
-from tqdm import tqdm
+
+from gensim.models import Doc2Vec
+from gensim.corpora import Dictionary
+from gensim.models import TfidfModel
+from gensim.models.ldamulticore import LdaMulticore
 
 from baseproc import BaseProc
 from utils import TextProcessor, Averager
 
 pd.options.mode.chained_assignment = None  # warning suppression
 
-from gensim.models import Doc2Vec
-from gensim.corpora import Dictionary
-from gensim.models import TfidfModel
-from gensim.models.ldamulticore import LdaMulticore
 
 # TODO: add regular expressions for HTML tags removal somewhere
 # TODO: make feature names shorter
@@ -32,15 +32,13 @@ class QueProc(BaseProc):
         self.lda_dic = Dictionary.load(path + 'questions.lda_dic')
         self.lda_tfidf = TfidfModel.load(path + 'questions.lda_tfidf')
         self.lda_model = LdaMulticore.load(path + 'questions.lda_model')
-        self.d2v = Doc2Vec.load(path + 'questions.d2v')
+        self.d2v_model = Doc2Vec.load(path + 'questions.d2v')
 
         self.features = {
-            'categorical': [],
             'numerical': {
                 'zero': ['questions_body_length', 'questions_tag_count'],
                 'mean': []
-            },
-            'date': []  # ['questions_date_added']
+            }
         }
 
         self._unroll_features()
@@ -85,15 +83,16 @@ class QueProc(BaseProc):
         lda_corpus = self.lda_tfidf[lda_corpus]
         lda_que_embs = self.lda_model.inference(lda_corpus)[0]
 
-        d2v_emb_len = len(self.d2v.infer_vector([]))
-        d2v_que_embs = df['questions_whole'].apply(lambda s: self.d2v.infer_vector(s, steps=100))
+        d2v_emb_len = len(self.d2v_model.infer_vector([]))
+
+        def __infer_d2v(s):
+            self.d2v_model.random.seed(0)
+            return self.d2v_model.infer_vector(s, steps=100)
+
+        d2v_que_embs = df['questions_whole'].apply(__infer_d2v)
 
         # re-order the columns
         df = df[['questions_id', 'questions_time'] + self.features['all']]
-
-        # append tag embeddings
-        for i in range(tag_emb_len):
-            df[f'que_tag_emb_{i}'] = mean_embs.apply(lambda x: x[i])
 
         # append lda question embeddings
         for i in range(lda_emb_len):
@@ -102,6 +101,10 @@ class QueProc(BaseProc):
         # append d2v question embeddings
         for i in range(d2v_emb_len):
             df[f'que_d2v_emb_{i}'] = d2v_que_embs.apply(lambda x: x[i])
+
+        # append tag embeddings
+        for i in range(tag_emb_len):
+            df[f'que_tag_emb_{i}'] = mean_embs.apply(lambda x: x[i])
 
         return df
 
@@ -122,8 +125,7 @@ class StuProc(BaseProc):
                 'zero': ['students_questions_asked'],
                 'mean': ['students_average_question_body_length', 'students_average_answer_body_length',
                          'students_average_answer_amount']
-            },
-            'date': []  # ['students_date_joined', 'students_previous_question_time']
+            }
         }
 
         self._unroll_features()
@@ -225,8 +227,7 @@ class ProProc(BaseProc):
                 'zero': [],  # ['professionals_questions_answered'],
                 'mean': ['professionals_average_question_body_length',
                          'professionals_average_answer_body_length']
-            },
-            'date': []  # ['professionals_date_joined', 'professionals_previous_answer_date']
+            }
         }
 
         self._unroll_features()

@@ -62,7 +62,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
             .merge(data['stu'], left_on='questions_author_id', right_on='students_id')
         if mode == 'Test':
             df = df.loc[df['answers_date_added'] >= split_date]
-            
+
         df = df[['questions_id', 'students_id', 'professionals_id', 'answers_date_added']]
 
         # extract positive pairs, non-negative pairs are all known positive pairs to the moment
@@ -95,8 +95,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
             stu_data.to_hdf(store, 'stu')
             pro_data.to_hdf(store, 'pro')
 
-        bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs,
-                            que_proc.pp['questions_date_added_time'], pro_dates)
+        bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs, pro_dates)
         print('Batches:', len(bg))
 
         if mode == 'Train':
@@ -107,10 +106,10 @@ def drive(data_path: str, dump_path: str, split_date: str):
                                   pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
                                   inter_dim=20, output_dim=10)
 
-            model.compile(Adam(lr=0.005), loss='binary_crossentropy', metrics=['accuracy'])
-            model.fit_generator(bg, epochs=10, verbose=2)
+            model.compile(Adam(lr=0.01), loss='binary_crossentropy', metrics=['accuracy'])
+            model.fit_generator(bg, epochs=5, verbose=2)
 
-            model.compile(Adam(lr=0.0005), loss='binary_crossentropy', metrics=['accuracy'])
+            model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
             model.fit_generator(bg, epochs=10, verbose=2)
 
             model.save_weights(dump_path + 'model.h5')
@@ -120,8 +119,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
             print(f'Loss: {loss}, accuracy: {acc}')
 
         # dummy batch generator used to extract single big batch of data to calculate feature importance
-        bg = BatchGenerator(que_data, stu_data, pro_data, 1024, pos_pairs, nonneg_pairs,
-                            que_proc.pp['questions_date_added_time'], pro_dates)
+        bg = BatchGenerator(que_data, stu_data, pro_data, 1024, pos_pairs, nonneg_pairs, pro_dates)
 
         # dict with descriptions of feature names, used for visualization of feature importance
         fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]),

@@ -5,8 +5,6 @@ import keras
 import numpy as np
 import pandas as pd
 
-from sklearn.preprocessing import StandardScaler
-
 
 # TODO: consider questions without answers
 
@@ -17,7 +15,7 @@ class BatchGenerator(keras.utils.Sequence):
     """
 
     def __init__(self, que: pd.DataFrame, stu: pd.DataFrame, pro: pd.DataFrame,
-                 batch_size: int, pos_pairs: list, nonneg_pairs: list, ss: StandardScaler, pro_dates: dict):
+                 batch_size: int, pos_pairs: list, nonneg_pairs: list, pro_dates: dict):
         """
         :param que: pre-processed questions data
         :param stu: pre-processed students data
@@ -28,7 +26,6 @@ class BatchGenerator(keras.utils.Sequence):
         (professional answered on the given question from corresponding student)
         :param nonneg_pairs: tuples of question, student and professional, which are known to form a positive pair.
         Superset of pos_pairs, used in sampling of negative pairs
-        :param ss: trained preprocessor of current_time feature
         :param pro_dates: mappings from professional's id to his registration date
         """
         self.batch_size = batch_size
@@ -69,8 +66,6 @@ class BatchGenerator(keras.utils.Sequence):
             self.pro_feat[pro_id] = np.array([group_ar[i, 1:] for i in range(group_ar.shape[0])])
             self.pro_time[pro_id] = np.array([group_ar[i, 0] for i in range(group_ar.shape[0])])
 
-        self.ss = ss
-
     def __len__(self):
         return len(self.pos_pairs) // self.batch_size
 
@@ -100,11 +95,8 @@ class BatchGenerator(keras.utils.Sequence):
             x_que.append(np.hstack([stu_data, que_data]))
             x_pro.append(pro_data)
 
-        # preprocess current times features
-        current_times = self.ss.transform(np.array(current_times).reshape(-1, 1))
         # and append them to both questions and professionals
         return np.vstack(x_que), np.vstack(x_pro)
-        # return np.hstack([np.vstack(x_que), current_times]), np.vstack(x_pro)
 
     def __getitem__(self, index):
         """

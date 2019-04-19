@@ -1,8 +1,11 @@
 import tensorflow as tf
 from keras.models import Model
-from keras.layers import Input, Dense, Lambda, Embedding, Concatenate
-from keras.regularizers import l2
+from keras.layers import Input, Dense, Lambda, Embedding, Concatenate, Layer
 from keras.optimizers import Adam
+
+
+def l2_reg_last_n(alpha: float, n: int):
+    return lambda w: alpha * tf.reduce_mean(tf.square(w[-n:, :]))
 
 
 def categorize(inputs: tf.Tensor, emb_input_dims: list, emb_output_dims: list):
@@ -41,7 +44,8 @@ class Encoder(Model):
     Model for extraction of high-level feature vector from question or professional
     """
 
-    def __init__(self, input_dim: int, inter_dim: int, output_dim: int, emb_input_dims: list, emb_output_dims: list):
+    def __init__(self, input_dim: int, inter_dim: int, output_dim: int, emb_input_dims: list, emb_output_dims: list,
+                 reg: bool = False):
         """
         :param input_dim: dimension of raw feature vector
         :param inter_dim: dimension of intermediate layer
@@ -53,7 +57,12 @@ class Encoder(Model):
         self.categorized = categorize(self.inputs, emb_input_dims, emb_output_dims)
 
         # here goes main dense layers
-        self.inter = Dense(inter_dim, activation='tanh')(self.categorized)
+        if not reg:
+            self.inter = Dense(inter_dim, activation='tanh')(self.categorized)
+        else:
+            self.inter = Dense(inter_dim, activation='tanh',
+                               kernel_regularizer=l2_reg_last_n(2.0, 10))(self.categorized)
+
         self.outputs = Dense(output_dim)(self.inter)
 
         super().__init__(self.inputs, self.outputs)
@@ -81,7 +90,7 @@ class DistanceModel(Model):
         super().__init__()
 
         # build an Encoder model for questions
-        self.que_model = Encoder(que_dim, inter_dim, output_dim, que_input_embs, que_output_embs)
+        self.que_model = Encoder(que_dim, inter_dim, output_dim, que_input_embs, que_output_embs, reg=True)
         # same for professionals
         self.pro_model = Encoder(pro_dim, inter_dim, output_dim, pro_input_embs, pro_output_embs)
 

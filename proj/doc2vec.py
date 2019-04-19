@@ -46,37 +46,36 @@ def save(d2v: Doc2Vec, prefix: str):
         pickle.dump(docvecs, file)
 
 
-def train_lda(df: pd.DataFrame, target: str, features: list, dim: int) -> (Dictionary, TfidfModel, LdaMulticore):
+def train_lda(df: pd.DataFrame, target: str, dim: int) -> (Dictionary, TfidfModel, LdaMulticore):
     """
     Train LdaMulticore model on provided data
 
     :param df: data to work with
-    :param target: column name of target entity in df to train embeddings for
-    :param features: list of feature names to be used for training
+    :param target: feature name to be used
     :param dim: dimension of embedding vectors to train
     :return: trained LdaMulticore model
     """
-    lda_tokens = df[features[0]].apply(lambda x: x.split())
+    lda_tokens = df[target].apply(lambda x: x.split())
 
     # create Dictionary and train it on text corpus
     lda_dic = Dictionary(lda_tokens)
     lda_dic.filter_extremes(no_below=10, no_above=0.6, keep_n=8000)
     lda_corpus = [lda_dic.doc2bow(doc) for doc in lda_tokens]
-    
+
     # create TfidfModel and train it on text corpus 
     lda_tfidf = TfidfModel(lda_corpus)
     lda_corpus = lda_tfidf[lda_corpus]
-    
+
     # create LDA Model and train it on text corpus
     lda_model = LdaMulticore(
         lda_corpus, num_topics=dim, id2word=lda_dic, workers=4,
         passes=20, chunksize=1000, alpha=0.02, random_state=0
     )
-    
+
     return lda_dic, lda_tfidf, lda_model
 
 
-def save_lda(lda_dic: Dictionary, lda_tfidf:TfidfModel, lda_model: LdaMulticore, prefix: str):
+def save_lda(lda_dic: Dictionary, lda_tfidf: TfidfModel, lda_model: LdaMulticore, prefix: str):
     """
     Serialize dict with mapping from entity to it's doc2vec embedding
     and save Doc2Vec object itself
@@ -144,9 +143,8 @@ def pipeline(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.D
 
     que_tags['questions_whole'] = que_tags['questions_title'] + ' ' + que_tags['questions_body']
 
-    d2v = train(que_tags, 'questions_id', ['questions_whole'], 5)
+    d2v = train(que_tags, 'questions_id', ['questions_whole'], 10)
     save(d2v, path + 'questions')
 
-    lda_dic, lda_tfidf, lda_model = train_lda(que_tags, 'questions_id', ['questions_whole'], 5)
+    lda_dic, lda_tfidf, lda_model = train_lda(que_tags, 'questions_whole', 10)
     save_lda(lda_dic, lda_tfidf, lda_model, path + 'questions')
-
