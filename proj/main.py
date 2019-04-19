@@ -36,10 +36,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
 
     with open(dump_path + 'que_stu_pairs.pkl', 'wb') as file:
         tmp = {row['questions_id']: row['questions_author_id'] for i, row in test['que'].iterrows()}
-        print(tmp)
         pickle.dump(tmp, file)
-
-    return
 
     tags = pd.read_csv(data_path + 'tags.csv')
     tag_que = pd.read_csv(data_path + 'tag_questions.csv') \
@@ -65,8 +62,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
             .merge(data['stu'], left_on='questions_author_id', right_on='students_id')
         if mode == 'Test':
             df = df.loc[df['answers_date_added'] >= split_date]
-        # else:
-        #     df = df.loc[df['answers_date_added'] >= '2016-01-01'] # experiment
+            
         df = df[['questions_id', 'students_id', 'professionals_id', 'answers_date_added']]
 
         # extract positive pairs, non-negative pairs are all known positive pairs to the moment
@@ -83,12 +79,10 @@ def drive(data_path: str, dump_path: str, split_date: str):
         que_proc = QueProc(oblige_fit, dump_path)
         que_data = que_proc.transform(data['que'], tag_que)
         print('Questions: ', que_data.shape)
-        print(que_data)
 
         stu_proc = StuProc(oblige_fit, dump_path)
         stu_data = stu_proc.transform(data['stu'], data['que'], data['ans'])
         print('Students: ', stu_data.shape)
-        print(stu_data)
 
         pro_proc = ProProc(oblige_fit, dump_path)
         pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'], tag_pro)
@@ -104,7 +98,6 @@ def drive(data_path: str, dump_path: str, split_date: str):
         bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs,
                             que_proc.pp['questions_date_added_time'], pro_dates)
         print('Batches:', len(bg))
-        print(pro_data)
 
         if mode == 'Train':
             # in train mode, build, compile train and save model
@@ -112,7 +105,7 @@ def drive(data_path: str, dump_path: str, split_date: str):
                                   que_input_embs=[102, 42], que_output_embs=[2, 2],
                                   pro_dim=len(pro_data.columns) - 2,
                                   pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
-                                  inter_dim=16, output_dim=10)
+                                  inter_dim=20, output_dim=10)
 
             model.compile(Adam(lr=0.005), loss='binary_crossentropy', metrics=['accuracy'])
             model.fit_generator(bg, epochs=10, verbose=2)

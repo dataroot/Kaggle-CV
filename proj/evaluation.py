@@ -52,21 +52,6 @@ def plot_fi(fi, title='Feature importances via shuffle', xlabel='Change in loss 
     """
     Nicely plot Pandas DataFrame with feature importance
     """
-    '''
-    def get_color(feature: str):
-        if feature.startswith('que'):
-            if '_emb_' in feature:
-                return 'slateblue'
-            else:
-                return 'mediumpurple'
-        elif feature.startswith('pro'):
-            if '_emb_' in feature:
-                return 'sienna'
-            else:
-                return 'peru'
-        else:
-            return 'teal'
-    '''
     def get_color(feature: str):
         if feature.startswith('que'):
             if '_emb_' in feature:
