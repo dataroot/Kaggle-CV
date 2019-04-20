@@ -1,136 +1,175 @@
-import pickle
+import os
 
 import pandas as pd
 
-from doc2vec import pipeline as pipeline_d2v
+from nlp import pipeline_d2v, pipeline_lda
 from processors import QueProc, StuProc, ProProc
 from generator import BatchGenerator
 from models import DistanceModel, SimpleModel, ConcatModel, Adam
 from evaluation import permutation_importance, plot_fi
+from utils import TextProcessor
 
 pd.set_option('display.max_columns', 100, 'display.width', 1024)
+pd.options.mode.chained_assignment = None
 
+DATA_PATH, SPLIT_DATE = '../../data/', '2019-01-01'
 
-def drive(data_path: str, dump_path: str, split_date: str):
-    """
-    Main function for data preparation, model training and evaluation pipeline
-    :param data_path: path to folder with initial .csv data files
-    :param dump_path: path to all the dump data, like saved models, calculated embeddings etc.
-    :param split_date: date used for splitting data on train and test subsets
-    """
-    train, test = dict(), dict()
+tp = TextProcessor()
 
-    # read and split to train and test all the main datasets
-    print('Raw data shapes:')
-    for var, file_name in [('que', 'questions.csv'), ('ans', 'answers.csv'),
-                           ('pro', 'professionals.csv'), ('stu', 'students.csv')]:
-        df = pd.read_csv(data_path + file_name)
+# ######################################################################################################################
+#
+#                                                       READ
+#
+# ######################################################################################################################
 
-        date_col = [col for col in df.columns if 'date' in col][0]
-        df[date_col] = pd.to_datetime(df[date_col])
+ans = pd.read_csv(os.path.join(DATA_PATH, 'answers.csv'), parse_dates=['answers_date_added'])
+ans['answers_body'] = ans['answers_body'].apply(tp.process)
+ans_train = ans[ans['answers_date_added'] < SPLIT_DATE]
 
-        train[var] = df[df[date_col] < split_date]
-        test[var] = df
+que = pd.read_csv(os.path.join(DATA_PATH, 'questions.csv'), parse_dates=['questions_date_added'])
+que['questions_title'] = que['questions_title'].apply(tp.process)
+que['questions_body'] = que['questions_body'].apply(tp.process)
+que_train = que[que['questions_date_added'] < SPLIT_DATE]
 
-        print(var, train[var].shape, test[var].shape)
+pro = pd.read_csv(os.path.join(DATA_PATH, 'professionals.csv'), parse_dates=['professionals_date_joined'])
+pro['professionals_headline'] = pro['professionals_headline'].apply(tp.process)
+pro['professionals_industry'] = pro['professionals_industry'].apply(tp.process)
+pro_train = pro[pro['professionals_date_joined'] < SPLIT_DATE]
 
-    with open(dump_path + 'que_stu_pairs.pkl', 'wb') as file:
-        tmp = {row['questions_id']: row['questions_author_id'] for i, row in test['que'].iterrows()}
-        pickle.dump(tmp, file)
+stu = pd.read_csv(os.path.join(DATA_PATH, 'students.csv'), parse_dates=['students_date_joined'])
+stu_train = stu[stu['students_date_joined'] < SPLIT_DATE]
 
-    tags = pd.read_csv(data_path + 'tags.csv')
-    tag_que = pd.read_csv(data_path + 'tag_questions.csv') \
-        .merge(tags, left_on='tag_questions_tag_id', right_on='tags_tag_id')
-    tag_pro = pd.read_csv(data_path + 'tag_users.csv') \
-        .merge(tags, left_on='tag_users_tag_id', right_on='tags_tag_id')
-    print('tag_que', tag_que.shape)
-    print('tag_pro', tag_pro.shape)
+tags = pd.read_csv(os.path.join(DATA_PATH, 'tags.csv'))
+tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: tp.process(x, allow_stopwords=True))
 
-    # calculate and save tag and industry embeddings on train data
-    # pipeline_d2v(train['que'], train['ans'], train['pro'], tag_que, 10, dump_path)
+tag_que = pd.read_csv(os.path.join(DATA_PATH, 'tag_questions.csv')) \
+    .merge(tags, left_on='tag_questions_tag_id', right_on='tags_tag_id')
+tag_users = pd.read_csv(os.path.join(DATA_PATH, 'tag_users.csv')) \
+    .merge(tags, left_on='tag_users_tag_id', right_on='tags_tag_id')
 
-    nonneg_pairs = []
-    for mode, data in [('Train', train), ('Test', test)]:
-        print(mode)
+# ######################################################################################################################
+#
+#                                               ADDITIONAL PREPARATION
+#
+# ######################################################################################################################
 
-        # mappings from professional's id to his registration date. Used in batch generator
-        pro_dates = {row['professionals_id']: row['professionals_date_joined'] for i, row in data['pro'].iterrows()}
+# mappings from question's id to its author id. Used in Predictor
+que_to_stu = {row['questions_id']: row['questions_author_id'] for i, row in que.iterrows()}
 
-        # construct dataframe used to extract positive pairs
-        df = data['que'].merge(data['ans'], left_on='questions_id', right_on='answers_question_id') \
-            .merge(data['pro'], left_on='answers_author_id', right_on='professionals_id') \
-            .merge(data['stu'], left_on='questions_author_id', right_on='students_id')
-        if mode == 'Test':
-            df = df.loc[df['answers_date_added'] >= split_date]
+# mappings from professional's id to his registration date. Used in batch generator
+pro_to_date = {row['professionals_id']: row['professionals_date_joined'] for i, row in pro.iterrows()}
 
-        df = df[['questions_id', 'students_id', 'professionals_id', 'answers_date_added']]
+# construct dataframe used to extract positive pairs
+pairs_df = que.merge(ans, left_on='questions_id', right_on='answers_question_id') \
+    .merge(pro, left_on='answers_author_id', right_on='professionals_id') \
+    .merge(stu, left_on='questions_author_id', right_on='students_id')
 
-        # extract positive pairs, non-negative pairs are all known positive pairs to the moment
-        pos_pairs = list(df.itertuples(index=False, name=None))
-        nonneg_pairs += pos_pairs
-        print(f'Positive pairs number: {len(pos_pairs)}, negative: {len(nonneg_pairs)}')
+pairs_df = pairs_df[['questions_id', 'students_id', 'professionals_id', 'answers_date_added']]
 
-        # fit new preprocessors in train mode
-        oblige_fit = (mode == 'Train')
+# ######################################################################################################################
+#
+#                                                       TRAIN
+#
+# ######################################################################################################################
 
-        # extract and preprocess feature for all three main entities
-        # TODO: make this step happen only once for all the data
+# calculate and save tag and industry embeddings on train data
+tag_embs, ind_embs, ques_d2v = pipeline_d2v(que_train, ans_train, pro_train, tag_que, 10)
+lda_dic, lda_tfidf, lda_model = pipeline_lda(que_train, tag_que, 10)
 
-        que_proc = QueProc(oblige_fit, dump_path)
-        que_data = que_proc.transform(data['que'], tag_que)
-        print('Questions: ', que_data.shape)
+# extract positive pairs
+pos_pairs = list(pairs_df.loc[pairs_df['answers_date_added'] < SPLIT_DATE].itertuples(index=False, name=None))
 
-        stu_proc = StuProc(oblige_fit, dump_path)
-        stu_data = stu_proc.transform(data['stu'], data['que'], data['ans'])
-        print('Students: ', stu_data.shape)
+# extract and preprocess feature for all three main entities
 
-        pro_proc = ProProc(oblige_fit, dump_path)
-        pro_data = pro_proc.transform(data['pro'], data['que'], data['ans'], tag_pro)
-        print('Professionals: ', pro_data.shape)
+que_proc = QueProc(tag_embs, ques_d2v, lda_dic, lda_tfidf, lda_model)
+que_data = que_proc.transform(que_train, tag_que)
 
-        # save all the useful data
-        if mode == 'Test':
-            store = pd.HDFStore(dump_path + 'processed.h5', 'w')
-            que_data.to_hdf(store, 'que')
-            stu_data.to_hdf(store, 'stu')
-            pro_data.to_hdf(store, 'pro')
+stu_proc = StuProc()
+stu_data = stu_proc.transform(stu_train, que_train, ans_train)
 
-        bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs, pro_dates)
-        print('Batches:', len(bg))
+pro_proc = ProProc(tag_embs, ind_embs)
+pro_data = pro_proc.transform(pro_train, que_train, ans_train, tag_users)
 
-        if mode == 'Train':
-            # in train mode, build, compile train and save model
-            model = DistanceModel(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2,
-                                  que_input_embs=[102, 42], que_output_embs=[2, 2],
-                                  pro_dim=len(pro_data.columns) - 2,
-                                  pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
-                                  inter_dim=20, output_dim=10)
+bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, pos_pairs, pro_to_date)
 
-            model.compile(Adam(lr=0.01), loss='binary_crossentropy', metrics=['accuracy'])
-            model.fit_generator(bg, epochs=5, verbose=2)
+# ######################################################################################################################
+#
+#                                                       MODEL
+#
+# ######################################################################################################################
 
-            model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
-            model.fit_generator(bg, epochs=10, verbose=2)
+# in train mode, build, compile train and save model
+model = DistanceModel(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2,
+                      que_input_embs=[102, 42], que_output_embs=[2, 2],
+                      pro_dim=len(pro_data.columns) - 2,
+                      pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
+                      inter_dim=20, output_dim=10)
 
-            model.save_weights(dump_path + 'model.h5')
-        else:
-            # in test mode just evaluate it
-            loss, acc = model.evaluate_generator(bg)
-            print(f'Loss: {loss}, accuracy: {acc}')
+model.compile(Adam(lr=0.01), loss='binary_crossentropy', metrics=['accuracy'])
+model.fit_generator(bg, epochs=5, verbose=2)
 
-        # dummy batch generator used to extract single big batch of data to calculate feature importance
-        bg = BatchGenerator(que_data, stu_data, pro_data, 1024, pos_pairs, nonneg_pairs, pro_dates)
+model.compile(Adam(lr=0.001), loss='binary_crossentropy', metrics=['accuracy'])
+model.fit_generator(bg, epochs=10, verbose=2)
 
-        # dict with descriptions of feature names, used for visualization of feature importance
-        fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]),
-              "pro": list(pro_data.columns[2:])}
+# ######################################################################################################################
+#
+#                                                   EVALUATION
+#
+# ######################################################################################################################
 
-        print(bg[0][0][0].shape, bg[0][0][1].shape)
+# dummy batch generator used to extract single big batch of data to calculate feature importance
+bg = BatchGenerator(que_data, stu_data, pro_data, 1024, pos_pairs, pos_pairs, pro_to_date)
 
-        # calculate and plot feature importance
-        fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
-        plot_fi(fi)
+# dict with descriptions of feature names, used for visualization of feature importance
+fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]),
+      "pro": list(pro_data.columns[2:])}
 
+# calculate and plot feature importance
+fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
+plot_fi(fi)
 
-if __name__ == '__main__':
-    drive('../../data/', 'dump/', '2019-01-01')
+# ######################################################################################################################
+#
+#                                                       TEST
+#
+# ######################################################################################################################
+
+# non-negative pairs are all known positive pairs to the moment
+nonneg_pairs = pos_pairs
+
+# extract positive pairs
+pos_pairs = list(pairs_df.loc[pairs_df['answers_date_added'] >= SPLIT_DATE].itertuples(index=False, name=None))
+nonneg_pairs += pos_pairs
+
+# extract and preprocess feature for all three main entities
+
+que_proc = QueProc(tag_embs, ques_d2v, lda_dic, lda_tfidf, lda_model)
+que_data = que_proc.transform(que, tag_que)
+
+stu_proc = StuProc()
+stu_data = stu_proc.transform(stu, que, ans)
+
+pro_proc = ProProc(tag_embs, ind_embs)
+pro_data = pro_proc.transform(pro, que, ans, tag_users)
+
+bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs, pro_to_date)
+
+# ######################################################################################################################
+#
+#                                                   EVALUATION
+#
+# ######################################################################################################################
+
+loss, acc = model.evaluate_generator(bg)
+print(f'Loss: {loss}, accuracy: {acc}')
+
+# dummy batch generator used to extract single big batch of data to calculate feature importance
+bg = BatchGenerator(que_data, stu_data, pro_data, 1024, pos_pairs, nonneg_pairs, pro_to_date)
+
+# dict with descriptions of feature names, used for visualization of feature importance
+fn = {"que": list(stu_data.columns[2:]) + list(que_data.columns[2:]),
+      "pro": list(pro_data.columns[2:])}
+
+# calculate and plot feature importance
+fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
+plot_fi(fi)

@@ -1,5 +1,3 @@
-import pickle
-
 import pandas as pd
 import numpy as np
 import keras
@@ -14,22 +12,12 @@ class Predictor:
     Class for handling closest professionals or questions queries
     """
 
-    def __init__(self, model: keras.Model, path: str):
+    def __init__(self, model: keras.Model, que_data: pd.DataFrame, stu_data: pd.DataFrame, pro_data: pd.DataFrame,
+                 pairs: dict, que_proc: QueProc, pro_proc: ProProc):
         """
         :param model: compiled Keras model
-        :param path: path to dump data
         """
         self.model = model
-
-        # load question-student pairs
-        with open(path + 'que_stu_pairs.pkl', 'rb') as file:
-            pairs = pickle.load(file)
-
-        # load preprocessed data
-        store = pd.HDFStore(path + 'processed.h5', 'r')
-        que_data = pd.read_hdf(store, 'que')
-        stu_data = pd.read_hdf(store, 'stu')
-        pro_data = pd.read_hdf(store, 'pro')
 
         # construct mappings from entity id to features
         self.que_dict = {row.values[0]: row.values[2:] for i, row in que_data.iterrows()}
@@ -69,8 +57,8 @@ class Predictor:
         self.pro_tree = KDTree(self.pro_lat_vecs)
 
         # initialize preprocessors
-        self.que_proc = QueProc(oblige_fit=False, path=path)
-        self.pro_proc = ProProc(oblige_fit=False, path=path)
+        self.que_proc = que_proc
+        self.pro_proc = pro_proc
 
     def __get_que_latent(self, que_df: pd.DataFrame, que_tags: pd.DataFrame) -> np.ndarray:
         """

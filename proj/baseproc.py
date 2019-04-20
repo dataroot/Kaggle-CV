@@ -1,12 +1,8 @@
-import pickle
-import os
-from abc import ABC
-
 import pandas as pd
 import numpy as np
 
+from abc import ABC
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from utils import TextProcessor
 
 
 class BaseProc(ABC):
@@ -14,33 +10,13 @@ class BaseProc(ABC):
     Class with implementation of basic preprocessors logic
     """
 
-    def __init__(self, oblige_fit, path):
-        """
-        :param oblige_fit: whether it is necessary to fit new preprocessor even if the one exists in preprocessors.pkl
-        :param path: path to all the data
-        """
-        self.oblige_fit = oblige_fit
-        self.path = path
-
+    def __init__(self):
+        self.pp = {}
         self.features = {
             'categorical': [],
             'numerical': {'zero': [], 'mean': []},
             'date': []
         }
-
-        # load preprocessors, if existent
-        if os.path.isfile(self.path + 'preprocessors.pkl'):
-            with open(self.path + 'preprocessors.pkl', 'rb') as file:
-                self.pp = pickle.load(file)
-        else:
-            self.pp = {}
-
-        self.tp = TextProcessor(path)
-
-    def __del__(self):
-        # serialize updated preprocessors
-        with open(self.path + 'preprocessors.pkl', 'wb') as file:
-            pickle.dump(self.pp, file)
 
     def _unroll_features(self):
         """
@@ -82,7 +58,7 @@ class BaseProc(ABC):
         :param base: new preprocessor's class
         :returns: preprocessor object
         """
-        if feature in self.pp and not self.oblige_fit:
+        if feature in self.pp:
             preproc = self.pp[feature]
         else:
             preproc = base()
@@ -142,8 +118,7 @@ class BaseProc(ABC):
         """
         Full preprocessing pipeline
 
-        :param df: data to work with.
-        :param verbose: whether to print some stupid log messages
+        :param df: data to work with
         """
         # preprocess all date features
         self.features['gen'] = []

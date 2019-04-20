@@ -1,6 +1,4 @@
 import re
-import os
-import pickle
 
 from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
@@ -11,29 +9,12 @@ class TextProcessor:
     Class for carrying all the text pre-processing stuff throughout the project
     """
 
-    def __init__(self, path: str):
-        """
-        :param path: path to stemmed.pkl file
-        serialized with pickle dict with mappings from raw word to stemmed version of it.
-        Used to speed things up because NLTK's PorterStemmer is relatively slow
-        """
-        self.path = path
-
+    def __init__(self):
         self.stopwords = stopwords.words('english')
         self.ps = PorterStemmer()
 
-        # load stemmed words if existent
-        if os.path.isfile(self.path + 'stemmed.pkl'):
-            with open(self.path + 'stemmed.pkl', 'rb') as file:
-                self.stemmed = pickle.load(file)
-        else:
-            # otherwise, stemmer will be used for each unique word again
-            self.stemmed = dict()
-
-    def __del__(self):
-        # save the updated mappings
-        with open(self.path + 'stemmed.pkl', 'wb') as file:
-            pickle.dump(self.stemmed, file)
+        # stemmer will be used for each unique word once
+        self.stemmed = dict()
 
     def process(self, text: str, allow_stopwords: bool = False) -> str:
         """

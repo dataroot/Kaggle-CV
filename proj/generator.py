@@ -1,5 +1,4 @@
 import random
-import pickle
 
 import keras
 import numpy as np
