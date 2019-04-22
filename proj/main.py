@@ -1,5 +1,7 @@
 import os
 
+# comment
+
 import pandas as pd
 
 from nlp import pipeline_d2v, pipeline_lda
