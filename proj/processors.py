@@ -114,6 +114,9 @@ class StuProc(BaseProc):
 
         self._unroll_features()
 
+    # TODO: add average time between questions
+    # TODO: add average questions age
+
     def transform(self, stu, que, ans) -> pd.DataFrame:
         stu['students_state'] = stu['students_location'].apply(lambda s: str(s).split(', ')[-1])
 
@@ -212,6 +215,9 @@ class ProProc(BaseProc):
         }
 
         self._unroll_features()
+
+    # TODO: add average question age
+    # TODO: add average time between answers
 
     def transform(self, pro, que, ans, tags) -> pd.DataFrame:
         # aggregate tags for each professional

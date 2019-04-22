@@ -13,7 +13,7 @@ from utils import TextProcessor
 pd.set_option('display.max_columns', 100, 'display.width', 1024)
 pd.options.mode.chained_assignment = None
 
-DATA_PATH, SPLIT_DATE = '../../data/', '2019-01-01'
+DATA_PATH, SPLIT_DATE, TO_DUMP = '../../data/', '2019-01-01', True
 
 tp = TextProcessor()
 
@@ -61,7 +61,11 @@ print('TRAIN')
 # tag_embs, ind_embs, ques_d2v = pipeline_d2v(que_train, ans_train, pro_train, tag_que, 10)
 # lda_dic, lda_tfidf, lda_model = pipeline_lda(que_train, 10)
 
-with open(r'..\..\dump.pkl', 'rb') as file:
+# if TO_DUMP:
+#     with open(r'..\..\d2v_lda.pkl', 'wb') as file:
+#         pickle.dump((ind_embs, lda_dic, lda_model, lda_tfidf, ques_d2v, tag_embs), file)
+
+with open(r'..\..\d2v_lda.pkl', 'rb') as file:
     ind_embs, lda_dic, lda_model, lda_tfidf, ques_d2v, tag_embs = pickle.load(file)
 
 # extract and preprocess feature for all three main entities
@@ -181,3 +185,15 @@ plot_fi(fi)
 
 # mappings from question's id to its author id. Used in Predictor
 que_to_stu = {row['questions_id']: row['questions_author_id'] for i, row in questions.iterrows()}
+
+if TO_DUMP:
+    d = {'que_data': que_data,
+         'stu_data': stu_data,
+         'pro_data': pro_data,
+         'que_proc': que_proc,
+         'pro_proc': pro_proc,
+         'que_to_stu': que_to_stu,
+         'pos_pairs': pos_pairs}
+    with open('dump.pkl', 'wb') as file:
+        pickle.dump(d, file)
+    model.save_weights('model.h5')

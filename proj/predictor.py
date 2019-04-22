@@ -5,6 +5,9 @@ import keras
 from sklearn.neighbors import KDTree
 
 from processors import QueProc, ProProc
+from utils import TextProcessor
+
+tp = TextProcessor()
 
 
 class Predictor:
