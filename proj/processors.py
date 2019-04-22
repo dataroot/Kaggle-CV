@@ -1,38 +1,28 @@
-import pickle
-
 import pandas as pd
 import numpy as np
 
-from gensim.models import Doc2Vec
-from gensim.corpora import Dictionary
-from gensim.models import TfidfModel
-from gensim.models.ldamulticore import LdaMulticore
-
 from baseproc import BaseProc
-from utils import TextProcessor, Averager
-
-pd.options.mode.chained_assignment = None  # warning suppression
+from utils import Averager
 
 
-# TODO: add regular expressions for HTML tags removal somewhere
 # TODO: make feature names shorter
+# TODO: docstrings
+# TODO: split transform methods
 
 class QueProc(BaseProc):
     """
     Questions data preprocessor
     """
 
-    def __init__(self, oblige_fit, path):
-        super().__init__(oblige_fit, path)
+    def __init__(self, tag_embs, ques_d2v, lda_dic, lda_tfidf, lda_model):
+        super().__init__()
 
-        with open(path + 'tags_embs.pkl', 'rb') as file:
-            self.embs = pickle.load(file)
+        self.tag_embs = tag_embs
+        self.ques_d2v = ques_d2v
 
-        self.tp = TextProcessor(path)
-        self.lda_dic = Dictionary.load(path + 'questions.lda_dic')
-        self.lda_tfidf = TfidfModel.load(path + 'questions.lda_tfidf')
-        self.lda_model = LdaMulticore.load(path + 'questions.lda_model')
-        self.d2v_model = Doc2Vec.load(path + 'questions.d2v')
+        self.lda_dic = lda_dic
+        self.lda_tfidf = lda_tfidf
+        self.lda_model = lda_model
 
         self.features = {
             'numerical': {
@@ -44,9 +34,6 @@ class QueProc(BaseProc):
         self._unroll_features()
 
     def transform(self, que, tags):
-        # process tags
-        tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))
-
         que['questions_time'] = que['questions_date_added']
         que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
 
@@ -61,33 +48,29 @@ class QueProc(BaseProc):
 
         # prepare tag embeddings
 
-        tag_emb_len = list(self.embs.values())[0].shape[0]
+        tag_emb_len = list(self.tag_embs.values())[0].shape[0]
 
         def __convert(s):
             embs = []
             for tag in str(s).split():
-                if tag in self.embs:
-                    embs.append(self.embs[tag])
+                if tag in self.tag_embs:
+                    embs.append(self.tag_embs[tag])
             if len(embs) == 0:
                 embs.append(np.zeros(tag_emb_len))
             return np.vstack(embs).mean(axis=0)
 
         mean_embs = df['tags_tag_name'].apply(__convert)
 
-        df['questions_whole'] = df['questions_title'] + ' ' + df['questions_body']
-        df['questions_whole'] = df['questions_whole'].apply(self.tp.process, allow_stopwords=False)
-        df['questions_whole'] = df['questions_whole'].apply(lambda s: s.split())
-
         lda_emb_len = len(self.lda_model[[]])
-        lda_corpus = [self.lda_dic.doc2bow(doc) for doc in df['questions_whole']]
+        lda_corpus = [self.lda_dic.doc2bow(doc) for doc in df['questions_whole'].apply(lambda x: x.split())]
         lda_corpus = self.lda_tfidf[lda_corpus]
         lda_que_embs = self.lda_model.inference(lda_corpus)[0]
 
-        d2v_emb_len = len(self.d2v_model.infer_vector([]))
+        d2v_emb_len = len(self.ques_d2v.infer_vector([]))
 
         def __infer_d2v(s):
-            self.d2v_model.random.seed(0)
-            return self.d2v_model.infer_vector(s, steps=100)
+            self.ques_d2v.random.seed(0)
+            return self.ques_d2v.infer_vector(s.split(), steps=100)
 
         d2v_que_embs = df['questions_whole'].apply(__infer_d2v)
 
@@ -116,8 +99,8 @@ class StuProc(BaseProc):
     Students data preprocessor
     """
 
-    def __init__(self, oblige_fit, path):
-        super().__init__(oblige_fit, path)
+    def __init__(self):
+        super().__init__()
 
         self.features = {
             'categorical': [('students_location', 100), ('students_state', 40)],
@@ -125,13 +108,11 @@ class StuProc(BaseProc):
                 'zero': ['students_questions_asked'],
                 'mean': ['students_average_question_body_length', 'students_average_answer_body_length',
                          'students_average_answer_amount']
-            }
+            },
+            'date': []
         }
 
         self._unroll_features()
-
-    # TODO: add average time between questions
-    # TODO: add average questions age
 
     def transform(self, stu, que, ans) -> pd.DataFrame:
         stu['students_state'] = stu['students_location'].apply(lambda s: str(s).split(', ')[-1])
@@ -150,14 +131,14 @@ class StuProc(BaseProc):
         que_change = que_change.rename(columns={'questions_date_added': 'students_time'})
 
         # stack two DataFrame to form resulting one for iteration
-        df = pd.concat([que_change, ans_change], ignore_index=True).sort_values('students_time')
+        df = pd.concat([que_change, ans_change], ignore_index=True, sort=True).sort_values('students_time')
 
         # data is a dist with mapping from student's id to his list of features
         # each list contains dicts with mapping from feature name to its value on a particular moment
         data = {}
         avgs = {}
 
-        for i, row in df.iterrows():
+        for i, row in stu.iterrows():
             cur_stu = row['students_id']
 
             # default case, student's feature values before he left any questions
@@ -168,6 +149,9 @@ class StuProc(BaseProc):
                     new[feature] = None
                 data[cur_stu] = [new]
                 avgs[cur_stu] = {feature: Averager() for feature in self.features['numerical']['mean']}
+
+        for i, row in df.iterrows():
+            cur_stu = row['students_id']
 
             # features on previous timestamp
             prv = data[cur_stu][-1]
@@ -211,14 +195,11 @@ class ProProc(BaseProc):
     Professionals data preprocessor
     """
 
-    def __init__(self, oblige_fit, path):
-        super().__init__(oblige_fit, path)
+    def __init__(self, tag_embs, ind_embs):
+        super().__init__()
 
-        with open(path + 'tags_embs.pkl', 'rb') as file:
-            self.tag_embs = pickle.load(file)
-
-        with open(path + 'industries_embs.pkl', 'rb') as file:
-            self.industry_embs = pickle.load(file)
+        self.tag_embs = tag_embs
+        self.ind_embs = ind_embs
 
         self.features = {
             'categorical': [('professionals_industry', 100), ('professionals_location', 100),
@@ -232,18 +213,13 @@ class ProProc(BaseProc):
 
         self._unroll_features()
 
-    # TODO: add average question age
-    # TODO: add average time between answers
-
     def transform(self, pro, que, ans, tags) -> pd.DataFrame:
-        tags['tags_tag_name'] = tags['tags_tag_name'].apply(lambda x: self.tp.process(x, allow_stopwords=True))
-
         # aggregate tags for each professional
         tags_grouped = tags.groupby('tag_users_user_id', as_index=False)[['tags_tag_name']] \
             .aggregate(lambda x: ' '.join(set(x)))
 
+        pro['professionals_industry_raw'] = pro['professionals_industry']
         pro['professionals_state'] = pro['professionals_location'].apply(lambda loc: str(loc).split(', ')[-1])
-        pro['professionals_industry_processed'] = pro['professionals_industry'].apply(lambda x: self.tp.process(x))
         que['questions_body_length'] = que['questions_body'].apply(lambda s: len(str(s)))
         ans['answers_body_length'] = ans['answers_body'].apply(lambda s: len(str(s)))
 
@@ -251,9 +227,12 @@ class ProProc(BaseProc):
         df = pro.merge(ans, left_on='professionals_id', right_on='answers_author_id') \
             .merge(que, left_on='answers_question_id', right_on='questions_id') \
             .sort_values('answers_date_added')
+
+        # data is a dist with mapping from professional's id to his list of features
+        # each list contains dicts with mapping from feature name to its value on a particular moment
         data = {}
 
-        for i, row in df.iterrows():
+        for i, row in pro.iterrows():
             cur_pro = row['professionals_id']
 
             # default case, professional's feature values before he left any questions
@@ -265,6 +244,9 @@ class ProProc(BaseProc):
                                 'professionals_average_answer_body_length']:
                     new[feature] = None
                 data[cur_pro] = [new]
+
+        for i, row in df.iterrows():
+            cur_pro = row['professionals_id']
 
             prv = data[cur_pro][-1]
             # feature update rules
@@ -284,8 +266,6 @@ class ProProc(BaseProc):
             data[cur_pro].append(new)
 
         # construct a dataframe out of dict of list of feature dicts
-        # data is a dist with mapping from professional's id to his list of features
-        # each list contains dicts with mapping from feature name to its value on a particular moment
         df = pd.DataFrame([{**f, **{'professionals_id': id}} for (id, fs) in data.items() for f in fs])
 
         df = df.merge(pro, on='professionals_id').merge(tags_grouped, how='left', left_on='professionals_id',
@@ -309,9 +289,9 @@ class ProProc(BaseProc):
         mean_tag_embs = df['tags_tag_name'].apply(__convert)
 
         # prepare industry embeddings
-        industry_emb_len = list(self.industry_embs.values())[0].shape[0]
-        industry_embs = df['professionals_industry_processed'] \
-            .apply(lambda x: self.industry_embs.get(x, np.zeros(industry_emb_len)))
+        industry_emb_len = list(self.ind_embs.values())[0].shape[0]
+        ind_embs = df['professionals_industry_raw'] \
+            .apply(lambda x: self.ind_embs.get(x, np.zeros(industry_emb_len)))
 
         # re-order the columns
         df = df[['professionals_id', 'professionals_time'] + self.features['all']]
@@ -321,6 +301,6 @@ class ProProc(BaseProc):
             df[f'pro_tag_emb_{i}'] = mean_tag_embs.apply(lambda x: x[i])
 
         for i in range(industry_emb_len):
-            df[f'pro_ind_emb_{i}'] = industry_embs.apply(lambda x: x[i])
+            df[f'pro_ind_emb_{i}'] = ind_embs.apply(lambda x: x[i])
 
         return df
