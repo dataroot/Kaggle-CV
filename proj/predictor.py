@@ -13,7 +13,7 @@ class Predictor:
     """
 
     def __init__(self, model: keras.Model, que_data: pd.DataFrame, stu_data: pd.DataFrame, pro_data: pd.DataFrame,
-                 pairs: dict, que_proc: QueProc, pro_proc: ProProc):
+                 que_proc: QueProc, pro_proc: ProProc, que_to_stu: dict, pos_pairs: list):
         """
         :param model: compiled Keras model
         """
@@ -24,12 +24,26 @@ class Predictor:
         self.stu_dict = {stu: group.values[-1, 2:] for stu, group in stu_data.groupby('students_id')}
         self.pro_dict = {pro: group.values[-1, 2:] for pro, group in pro_data.groupby('professionals_id')}
 
-        # form final features for all known questions and professionals
+        self.entity_to_paired = dict()
+
+        # construct mappings from entity to other entities it was in positive pair
+        for que, stu, pro, time in pos_pairs:
+            if que not in self.entity_to_paired:
+                self.entity_to_paired[que] = {pro}
+            else:
+                self.entity_to_paired[que].add(pro)
+
+            if pro not in self.entity_to_paired:
+                self.entity_to_paired[pro] = {que}
+            else:
+                self.entity_to_paired[pro].add(que)
+
+        # form final features for 1all known questions and professionals
 
         que_feat, que_ids, pro_feat, pro_ids = [], [], [], []
 
         for que in self.que_dict.keys():
-            cur_stu = pairs[que]
+            cur_stu = que_to_stu[que]
             if cur_stu in self.stu_dict:
                 # actual question's features are both question and student's features
                 que_feat.append(np.hstack([self.stu_dict[cur_stu], self.que_dict[que]]))
@@ -98,12 +112,12 @@ class Predictor:
 
         return lat_vecs
 
-    @staticmethod
-    def __construct_df(ids, sims, scores):
+    def __construct_df(self, ids, sims, scores):
         tuples = []
-        for i, id in enumerate(ids):
-            for j, sim_que in enumerate(sims[i]):
-                tuples.append((id, sim_que[0], scores[i, j]))
+        for i, cur_id in enumerate(ids):
+            for j, sim in enumerate(sims[i]):
+                if sim[0] not in self.entity_to_paired.get(cur_id, {}):
+                    tuples.append((cur_id, sim[0], scores[i, j]))
         score_df = pd.DataFrame(tuples, columns=['id', 'match_id', 'match_score'])
         return score_df
 
@@ -114,7 +128,7 @@ class Predictor:
         dists, ques = self.que_tree.query(lat_vecs, k=top)
         ques = self.que_ids[ques]
         scores = np.exp(-dists)
-        return Predictor.__construct_df(ids, ques, scores)
+        return self.__construct_df(ids, ques, scores)
 
     def __get_pros_by_latent(self, ids: np.ndarray, lat_vecs: np.ndarray, top: int) -> pd.DataFrame:
         """
@@ -123,7 +137,7 @@ class Predictor:
         dists, pros = self.pro_tree.query(lat_vecs, k=top)
         pros = self.pro_ids[pros]
         scores = np.exp(-dists)
-        return Predictor.__construct_df(ids, pros, scores)
+        return self.__construct_df(ids, pros, scores)
 
     def find_pros_by_que(self, que_df: pd.DataFrame, que_tags: pd.DataFrame, top: int = 10) -> pd.DataFrame:
         """
@@ -195,11 +209,11 @@ class Formatter:
 
         tag_merged = tags.merge(tag_users, left_on='tags_tag_id', right_on='tag_users_tag_id')
         tags_grouped = tag_merged.groupby('tag_users_user_id').agg(lambda x: ' '.join(x))[['tags_tag_name']]
-        self.pro = pro.merge(tags_grouped, left_on='professionals_id', right_index=True)
+        self.pro = pro.merge(tags_grouped, left_on='professionals_id', right_index=True, how='left')
 
         tag_merged = tags.merge(tag_que, left_on='tags_tag_id', right_on='tag_questions_tag_id')
         tags_grouped = tag_merged.groupby('tag_questions_question_id').agg(lambda x: ' '.join(x))[['tags_tag_name']]
-        self.que = que.merge(tags_grouped, left_on='questions_id', right_index=True)
+        self.que = que.merge(tags_grouped, left_on='questions_id', right_index=True, how='left')
 
     def get_que(self, scores: pd.DataFrame) -> pd.DataFrame:
         """
@@ -246,6 +260,11 @@ class Formatter:
         que_tags = pd.DataFrame(tuples, columns=['tag_questions_question_id', 'tags_tag_name'])
         que_df.drop(columns='questions_tags', inplace=True)
 
+        que_tags['tags_tag_name'] = que_tags['tags_tag_name'].apply(lambda x: tp.process(x, allow_stopwords=True))
+        que_df['questions_title'] = que_df['questions_title'].apply(tp.process)
+        que_df['questions_body'] = que_df['questions_body'].apply(tp.process)
+        que_df['questions_whole'] = que_df['questions_title'] + ' ' + que_df['questions_body']
+
         return que_df, que_tags
 
     @staticmethod
@@ -265,5 +284,9 @@ class Formatter:
         # create DataFrame from tuples
         pro_tags = pd.DataFrame(tuples, columns=['tag_users_user_id', 'tags_tag_name'])
         pro_df.drop(columns='professionals_subscribed_tags', inplace=True)
+
+        pro_tags['tags_tag_name'] = pro_tags['tags_tag_name'].apply(lambda x: tp.process(x, allow_stopwords=True))
+        pro_df['professionals_headline'] = pro_df['professionals_headline'].apply(tp.process)
+        pro_df['professionals_industry'] = pro_df['professionals_industry'].apply(tp.process)
 
         return pro_df, pro_tags

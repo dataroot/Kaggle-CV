@@ -75,7 +75,14 @@ class BaseProc(ABC):
         :param fillmode: method to fill NaNs, either 'mean' or 'zero'
         """
         # calculate default value and fill NaNs with it
-        na = df[feature].mean() if fillmode == 'mean' else 0
+        if fillmode == 'mean':
+            if feature in self.pp:
+                na = self.pp[feature].mean_[0]
+            else:
+                na = df[feature].mean()
+        else:
+            na = 0
+
         df[feature].fillna(na, inplace=True)
 
         # standardize feature values

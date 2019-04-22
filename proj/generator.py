@@ -13,6 +13,8 @@ class BatchGenerator(keras.utils.Sequence):
     in form of batches of NumPy arrays
     """
 
+    exp_mean = 30
+
     def __init__(self, que: pd.DataFrame, stu: pd.DataFrame, pro: pd.DataFrame,
                  batch_size: int, pos_pairs: list, nonneg_pairs: list, pro_dates: dict):
         """
@@ -109,10 +111,7 @@ class BatchGenerator(keras.utils.Sequence):
                 # sample question, its student and time
                 que, stu, zero = random.choice(self.ques_stus_times)
                 # calculate shift between question's and current time
-                while True:
-                    shift = np.random.exponential(50) - 35
-                    if shift > 0:
-                        break
+                shift = np.random.exponential(BatchGenerator.exp_mean)
                 current_time = zero + pd.Timedelta(int(shift * 24 * 60), 'm')
                 # find number of professionals with registration date before current time
                 i = np.searchsorted(self.pros_times, current_time)

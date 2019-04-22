@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from jupyterthemes import jtplot
-from tqdm import tqdm
 
 from sklearn.utils import shuffle
 import keras
@@ -28,7 +27,7 @@ def permutation_importance(model: keras.models.Model, x_que: np.ndarray, x_pro: 
     # model performance on normal, non-shuffled data
     base_loss, base_acc = model.evaluate([x_que, x_pro], y)
     losses = []
-    for i, name in enumerate(tqdm(fn['que'] + fn['pro'], desc="Feature importance")):
+    for i, name in enumerate(fn['que'] + fn['pro']):
         loss = 0
         for j in range(n_trials):
             x_que_i, x_pro_i = copy.deepcopy(x_que), copy.deepcopy(x_pro)
@@ -52,6 +51,7 @@ def plot_fi(fi, title='Feature importances via shuffle', xlabel='Change in loss 
     """
     Nicely plot Pandas DataFrame with feature importance
     """
+
     def get_color(feature: str):
         if feature.startswith('que'):
             if '_emb_' in feature:
@@ -73,15 +73,3 @@ def plot_fi(fi, title='Feature importances via shuffle', xlabel='Change in loss 
     plt.xlabel(xlabel)
     ax.yaxis.tick_right()
     plt.show()
-
-
-def vis_emb(model, layer, names, figsize, colors, title, s=None):
-    """
-    Visualize embeddings of a single feature
-    """
-    emb = (model.get_layer(layer).get_weights()[0])
-    fig, ax = plt.subplots(figsize=figsize)
-    ax.scatter(emb[:, 0], emb[:, 1], c=colors, s=s)
-    for i, name in enumerate(names):
-        ax.annotate(name, (emb[i, 0], emb[i, 1]))
-    plt.title(title)

@@ -1,5 +1,3 @@
-import pickle
-
 import pandas as pd
 import numpy as np
 
@@ -7,8 +5,9 @@ from baseproc import BaseProc
 from utils import Averager
 
 
-# TODO: add regular expressions for HTML tags removal somewhere
 # TODO: make feature names shorter
+# TODO: docstrings
+# TODO: split transform methods
 
 class QueProc(BaseProc):
     """
@@ -62,11 +61,8 @@ class QueProc(BaseProc):
 
         mean_embs = df['tags_tag_name'].apply(__convert)
 
-        df['questions_whole'] = df['questions_title'] + ' ' + df['questions_body']
-        df['questions_whole'] = df['questions_whole'].apply(lambda s: s.split())
-
         lda_emb_len = len(self.lda_model[[]])
-        lda_corpus = [self.lda_dic.doc2bow(doc) for doc in df['questions_whole']]
+        lda_corpus = [self.lda_dic.doc2bow(doc) for doc in df['questions_whole'].apply(lambda x: x.split())]
         lda_corpus = self.lda_tfidf[lda_corpus]
         lda_que_embs = self.lda_model.inference(lda_corpus)[0]
 
@@ -74,7 +70,7 @@ class QueProc(BaseProc):
 
         def __infer_d2v(s):
             self.ques_d2v.random.seed(0)
-            return self.ques_d2v.infer_vector(s, steps=100)
+            return self.ques_d2v.infer_vector(s.split(), steps=100)
 
         d2v_que_embs = df['questions_whole'].apply(__infer_d2v)
 
@@ -118,9 +114,6 @@ class StuProc(BaseProc):
 
         self._unroll_features()
 
-    # TODO: add average time between questions
-    # TODO: add average questions age
-
     def transform(self, stu, que, ans) -> pd.DataFrame:
         stu['students_state'] = stu['students_location'].apply(lambda s: str(s).split(', ')[-1])
 
@@ -145,7 +138,7 @@ class StuProc(BaseProc):
         data = {}
         avgs = {}
 
-        for i, row in df.iterrows():
+        for i, row in stu.iterrows():
             cur_stu = row['students_id']
 
             # default case, student's feature values before he left any questions
@@ -156,6 +149,9 @@ class StuProc(BaseProc):
                     new[feature] = None
                 data[cur_stu] = [new]
                 avgs[cur_stu] = {feature: Averager() for feature in self.features['numerical']['mean']}
+
+        for i, row in df.iterrows():
+            cur_stu = row['students_id']
 
             # features on previous timestamp
             prv = data[cur_stu][-1]
@@ -217,9 +213,6 @@ class ProProc(BaseProc):
 
         self._unroll_features()
 
-    # TODO: add average question age
-    # TODO: add average time between answers
-
     def transform(self, pro, que, ans, tags) -> pd.DataFrame:
         # aggregate tags for each professional
         tags_grouped = tags.groupby('tag_users_user_id', as_index=False)[['tags_tag_name']] \
@@ -234,9 +227,12 @@ class ProProc(BaseProc):
         df = pro.merge(ans, left_on='professionals_id', right_on='answers_author_id') \
             .merge(que, left_on='answers_question_id', right_on='questions_id') \
             .sort_values('answers_date_added')
+
+        # data is a dist with mapping from professional's id to his list of features
+        # each list contains dicts with mapping from feature name to its value on a particular moment
         data = {}
 
-        for i, row in df.iterrows():
+        for i, row in pro.iterrows():
             cur_pro = row['professionals_id']
 
             # default case, professional's feature values before he left any questions
@@ -248,6 +244,9 @@ class ProProc(BaseProc):
                                 'professionals_average_answer_body_length']:
                     new[feature] = None
                 data[cur_pro] = [new]
+
+        for i, row in df.iterrows():
+            cur_pro = row['professionals_id']
 
             prv = data[cur_pro][-1]
             # feature update rules
@@ -267,8 +266,6 @@ class ProProc(BaseProc):
             data[cur_pro].append(new)
 
         # construct a dataframe out of dict of list of feature dicts
-        # data is a dist with mapping from professional's id to his list of features
-        # each list contains dicts with mapping from feature name to its value on a particular moment
         df = pd.DataFrame([{**f, **{'professionals_id': id}} for (id, fs) in data.items() for f in fs])
 
         df = df.merge(pro, on='professionals_id').merge(tags_grouped, how='left', left_on='professionals_id',

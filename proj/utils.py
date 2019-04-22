@@ -20,7 +20,7 @@ class TextProcessor:
         """
         Process the specified text,
         splitting by non-alphabetic symbols, casting to lower case,
-        removing stopwords and stemming each word
+        removing stopwords, HTML tags and stemming each word
 
         :param text: text to precess
         :param allow_stopwords: whether to remove stopwords
@@ -29,6 +29,7 @@ class TextProcessor:
         ret = []
 
         # split and cast to lower case
+        text = re.sub(r'<[^>]+>', ' ', str(text))
         for word in re.split('[^a-zA-Z]', str(text).lower()):
             # remove non-alphabetic and stop words
             if (word.isalpha() and word not in self.stopwords) or allow_stopwords:
@@ -40,6 +41,10 @@ class TextProcessor:
 
 
 class Averager:
+    """
+    Small class useful for computing averaged features values
+    """
+
     def __init__(self):
         self.sum = 0
         self.cnt = 0
