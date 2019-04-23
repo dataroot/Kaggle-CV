@@ -1,9 +1,18 @@
 <html>
 <head>
-    <title>Kaggle CV Demo</title>
+    <title>Data Science for Good: CareerVillage.org | Kaggle Demo</title>
     <link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.4.0.min.js"
             integrity="sha256-BJeo0qm959uMBGb65z40ejJYGSgR7REI4+CW1fNKwOg=" crossorigin="anonymous"></script>
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-129799972-1"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'UA-129799972-1');
+    </script>  
     <style type="text/css">
         * {
             font-size: 16px;
@@ -63,7 +72,11 @@
 </head>
 
 <body style="margin: 32px;">
-<h2 style="font-size: 24px;">Kaggle CV Demo</h2>
+<h2 style="font-size: 24px;">Kaggle Demo</h2>
+<h3 style="font-size: 20px;"><a href="https://www.kaggle.com/c/data-science-for-good-careervillage">Data Science for Good: CareerVillage.org</a></h3>
+<h4 style="font-size: 18px;">Live Demo with NN based fast similarity search</h3>
+<h5 style="font-size: 14px;">Proposed method takes into account all the possible content features using custom Neural Network Architecture. <br> Allows automatically find a probability mapping between question and professional entities in all of the combinations (que-que, que-pro, pro-que, pro-pro)</h4>
+
 <div style="display: flex;">
     <div id="questions_tab" class="tab tab_active">
         Question
@@ -73,24 +86,34 @@
     </div>
 </div>
 <div id="questions_content" class="content show">
+    <div style="margin-bottom: 20px;"><b>Finds similar questions to given student and question</b></div>
     <div style="display: flex;">
         <form id="questions_form" style="display: block; min-width: 320px;">
             <label>Student selector</label>
             <select name="questions_author_id" style="display: block">
                 <option value="8f6f374ffd834d258ab69d376dd998f5">Student 1 a lot of info</option>
+                <option value="12a89e96755a4dba83ff03e03043d9c0">Student 2 a lot of info</option>
+                <option value="e37a5990fe354c60be5e87376b08d5e3">Student 3 a lot of info</option>
+                <option value="12b402cceeda43dcb6e12ef9f2d221ea">Student 4 a lot of info</option>
+                <option value="a0f431fc79794edcb104f68ce55ab897">Student 5 a lot of info</option>
+                <option value="23aea4702d804bd88d1e9fb28074a1b4">Student 6 a lot of info</option>
+                <option value="18a8f9363cd24a37b690e1b205146b14">Student 7 a lot of info</option>
+                <option value="d21c67279ada49d1bcf66ad620c00911">Student 8 a lot of info</option>
+                <option value="433c0f5f90344453ba50ec8aee5fdfa4">Student 9 a lot of info</option>
+                <option value="f0a7d23c3d374f8d9a1a5eb9b96eab0f">Student 10 a lot of info</option>
             </select>
             <br>
 
-            <label>Title</label>
-            <input name="questions_title" style="display: block">
+            <label>Question Title</label>
+            <input name="questions_title" style="display: block" placeholder="Study Law">
             <br>
 
-            <label>Body</label>
-            <textarea name="questions_body" rows="6" style="display: block"></textarea>
+            <label>Question Body</label>
+            <textarea name="questions_body" rows="6" style="display: block" placeholder="I want to study law but not sure what subjects need to be taken, so need some advice on that."></textarea>
             <br>
 
-            <label>Tags</label>
-            <input name="questions_tags" style="display: block">
+            <label>Question Tags</label>
+            <input name="questions_tags" style="display: block" placeholder="law justice judge">
             <br>
 
             <!--<button type="submit">Submit</button>-->
@@ -106,14 +129,13 @@
             <table id="questions_table" style="display: block; word-break: break-all;" class="hide">
                 <thead>
                 <tr>
-                    <th style="width: 10%">id</th>
                     <th style="width: 10%">score</th>
-                    <th style="width: 10%">author_id</th>
-                    <th style="width: 30%">body</th>
-                    <th style="width: 10%">date</th>
-                    <th style="width: 10%">id</th>
-                    <th style="width: 10%">title</th>
+                    <th style="width: 20%">title</th>
+                    <th style="width: 20%">body</th>
                     <th style="width: 10%">tags</th>
+                    <th style="width: 10%">date</th>
+                    <th style="width: 10%">question_id</th>
+                    <th style="width: 10%">author_id</th>
                 </tr>
                 </thead>
                 <tbody></tbody>
@@ -122,11 +144,12 @@
     </div>
 </div>
 <div id="professionals_content" class="content hide">
+    <div style="margin-bottom: 20px;"><b>Finds relevant questions for professional to answer</b></div>
     <div style="display: flex;">
         <form id="professionals_form" style="display: block; min-width: 320px;">
-            <label>Student selector</label>
+            <label>Professional Selector</label>
             <select name="professionals_id" style="display: block">
-                <option value="8f6f374ffd834d258ab69d376dd998f5">Student 1 a lot of info</option>
+                <option value="2fe502d5ca75449aace3e278eb1398d9">Professional 1 a lot of info</option>
             </select>
             <br>
 
@@ -144,14 +167,13 @@
             <table id="professionals_table" style="display: block; word-break: break-all;" class="hide">
                 <thead>
                 <tr>
-                    <th style="width: 10%">id</th>
                     <th style="width: 10%">score</th>
-                    <th style="width: 10%">date_joined</th>
-                    <th style="width: 10%">headline</th>
-                    <th style="width: 10%">id</th>
-                    <th style="width: 10%">industry</th>
-                    <th style="width: 10%">location</th>
+                    <th style="width: 20%">title</th>
+                    <th style="width: 20%">body</th>
                     <th style="width: 10%">tags</th>
+                    <th style="width: 10%">date</th>
+                    <th style="width: 10%">question_id</th>
+                    <th style="width: 10%">author_id</th>
                 </tr>
                 </thead>
                 <tbody></tbody>
@@ -159,6 +181,7 @@
         </div>
     </div>
 </div>
+<div><i>by <a href="https://datarootlabs.com">data root labs</a> team</i></div>
 </body>
 
 <script>
@@ -199,14 +222,6 @@
         e.preventDefault();
         var data = $(this).serializeObject()
 
-        // if (data.questions_author_id.length === 0 ||
-        //     data.questions_title.length === 0 ||
-        //     data.questions_body.length === 0 ||
-        //     data.questions_tags.length === 0) {
-        //     window.alert("Please, fill all the fields!")
-        //     return false;
-        // }
-
         $.ajax({
             url: apiPath + '/question',
             type: 'POST',
@@ -223,7 +238,7 @@
                 $("#questions_table>tbody").empty();
 
                 $.each(data, function () {
-                    $("#questions_table>tbody").append('<tr><td>' + this.id + '</td><td>' + this.match_score + '</td><td>' + this.questions_author_id + '</td><td>' + this.questions_body + '</td><td>' + this.questions_date_added + '</td><td>' + this.questions_id + '</td><td>' + this.questions_title + '</td><td>' + this.tags_tag_name + '</td></tr>')
+                    $("#questions_table>tbody").append('<tr><td><b>' + this.match_score + '</b></td><td>' + this.questions_title + '</td><td>' + this.questions_body + '</td><td>' + this.tags_tag_name + '</td><td>' + this.questions_date_added + '</td><td>' + this.questions_id + '</td><td>' + this.questions_author_id + '</td></tr>')
                 })
             },
             error: function (e) {
@@ -239,14 +254,6 @@
     $("#professionals_form").on('input, submit', function (e) {
         e.preventDefault();
         var data = $(this).serializeObject()
-
-        // if (data.questions_author_id.length === 0 ||
-        //     data.questions_title.length === 0 ||
-        //     data.questions_body.length === 0 ||
-        //     data.questions_tags.length === 0) {
-        //     window.alert("Please, fill all the fields!")
-        //     return false;
-        // }
 
         $.ajax({
             url: apiPath + '/professional',
@@ -264,7 +271,7 @@
                 $("#professionals_table>tbody").empty();
 
                 $.each(data, function () {
-                    $("#professionals_table>tbody").append('<tr><td>' + this.id + '</td><td>' + this.match_score + '</td><td>' + this.professionals_date_joined + '</td><td>' + this.professionals_headline + '</td><td>' + this.professionals_id + '</td><td>' + this.professionals_industry + '</td><td>' + this.professionals_location + '</td><td>' + this.tags_tag_name + '</td></tr>')
+                    $("#professionals_table>tbody").append('<tr><td><b>' + this.match_score + '</b></td><td>' + this.questions_title + '</td><td>' + this.questions_body + '</td><td>' + this.tags_tag_name + '</td><td>' + this.questions_date_added + '</td><td>' + this.questions_id + '</td><td>' + this.questions_author_id + '</td></tr>')
                 })
             }
         });
