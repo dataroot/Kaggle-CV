@@ -5,6 +5,9 @@ from keras.optimizers import Adam
 
 
 def l2_reg_last_n(alpha: float, n: int):
+    """
+    Adds L2 regularization on weights connected with the last n features with multiplier alpha
+    """
     return lambda w: alpha * tf.reduce_mean(tf.square(w[-n:, :]))
 
 
@@ -60,6 +63,7 @@ class Encoder(Model):
         if not reg:
             self.inter = Dense(inter_dim, activation='tanh')(self.categorized)
         else:
+            # in Question's encoder, constrain the last 10 features, which in our case are tag embeddings
             self.inter = Dense(inter_dim, activation='tanh',
                                kernel_regularizer=l2_reg_last_n(2.0, 10))(self.categorized)
 
