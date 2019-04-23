@@ -2,6 +2,7 @@ from flask_cors import CORS
 from flask import request
 from flask import Flask, Response
 from flask import render_template
+from processors import QueProc, ProProc
 
 import traceback
 import numpy as np
@@ -21,6 +22,7 @@ from utils import TextProcessor
 from models import DistanceModel
 from predictor import Predictor, Formatter
 
+pd.set_option('display.width', 1024, 'display.max_columns', 100)
 
 
 DATA_PATH = 'data'
@@ -29,7 +31,7 @@ tp = TextProcessor()
 
 model = DistanceModel(que_dim= 34 - 2 + 8 - 2,
                                   que_input_embs=[102, 42], que_output_embs=[2, 2],
-                                  pro_dim=27 - 2,
+                                  pro_dim=42 - 2,
                                   pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
                                   inter_dim=20, output_dim=10)
 with open('dump.pkl', 'rb') as file:
