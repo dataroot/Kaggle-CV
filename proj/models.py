@@ -48,24 +48,21 @@ class Encoder(Model):
     """
 
     def __init__(self, input_dim: int, inter_dim: int, output_dim: int, emb_input_dims: list, emb_output_dims: list,
-                 reg: bool = False):
+                 reg: float = 0.0):
         """
         :param input_dim: dimension of raw feature vector
         :param inter_dim: dimension of intermediate layer
         :param output_dim: dimension of computed high-level feature vector
         :param emb_input_dims: number of unique classes in categorical features
         :param emb_output_dims: embedding dimensions of categorical features
+        :param reg:
         """
         self.inputs = Input((input_dim,))
         self.categorized = categorize(self.inputs, emb_input_dims, emb_output_dims)
 
         # here goes main dense layers
-        if not reg:
-            self.inter = Dense(inter_dim, activation='tanh')(self.categorized)
-        else:
-            # in Question's encoder, constrain the last 10 features, which in our case are tag embeddings
-            self.inter = Dense(inter_dim, activation='tanh',
-                               kernel_regularizer=l2_reg_last_n(2.0, 10))(self.categorized)
+        self.inter = Dense(inter_dim, activation='tanh',
+                           kernel_regularizer=l2_reg_last_n(reg, 10))(self.categorized)
 
         self.outputs = Dense(output_dim)(self.inter)
 
@@ -94,9 +91,9 @@ class DistanceModel(Model):
         super().__init__()
 
         # build an Encoder model for questions
-        self.que_model = Encoder(que_dim, inter_dim, output_dim, que_input_embs, que_output_embs, reg=True)
+        self.que_model = Encoder(que_dim, inter_dim, output_dim, que_input_embs, que_output_embs, reg=2.0)
         # same for professionals
-        self.pro_model = Encoder(pro_dim, inter_dim, output_dim, pro_input_embs, pro_output_embs)
+        self.pro_model = Encoder(pro_dim, inter_dim, output_dim, pro_input_embs, pro_output_embs, reg=0.2)
 
         # calculate distance between high-level feature vectors
         self.merged = Lambda(lambda x: tf.reduce_sum(tf.square(x[0] - x[1]), axis=-1))(

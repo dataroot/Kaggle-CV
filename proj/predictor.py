@@ -19,6 +19,13 @@ class Predictor:
                  que_proc: QueProc, pro_proc: ProProc, que_to_stu: dict, pos_pairs: list):
         """
         :param model: compiled Keras model
+        :param que_data: processed questions's data
+        :param stu_data: processed student's data
+        :param pro_data: processed professional's data
+        :param que_proc: question's data processor
+        :param pro_proc: professional's data processor
+        :param que_to_stu: mappings from question's id to its author id
+        :param pos_pairs: list of positive question-student-professional-time pairs
         """
         self.model = model
 
@@ -116,6 +123,7 @@ class Predictor:
         return lat_vecs
 
     def __construct_df(self, ids, sims, scores):
+        scores = np.around(scores, 4)
         tuples = []
         for i, cur_id in enumerate(ids):
             for j, sim in enumerate(sims[i]):

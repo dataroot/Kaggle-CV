@@ -33,7 +33,7 @@ with open('dump.pkl', 'rb') as file:
     pos_pairs = d['pos_pairs']
 
 pred = Predictor(model, que_data, stu_data, pro_data, que_proc, pro_proc, que_to_stu, pos_pairs)
-formatter = Formatter('data/')
+formatter = Formatter('../../data/')
 
 
 app = Flask(__name__, static_url_path='', template_folder='views')
@@ -182,4 +182,4 @@ def professional():
 
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port = 8000)
+    app.run(debug=False, host='0.0.0.0', port = 9876)

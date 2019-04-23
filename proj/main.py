@@ -58,15 +58,15 @@ tag_pro = pd.read_csv(os.path.join(DATA_PATH, 'tag_users.csv')) \
 print('TRAIN')
 
 # calculate and save tag and industry embeddings on train data
-# tag_embs, ind_embs, ques_d2v = pipeline_d2v(que_train, ans_train, pro_train, tag_que, 10)
+# tag_embs, ind_embs, head_d2v, ques_d2v = pipeline_d2v(que_train, ans_train, pro_train, tag_que, tag_pro, 10)
 # lda_dic, lda_tfidf, lda_model = pipeline_lda(que_train, 10)
-
+#
 # if TO_DUMP:
 #     with open(r'..\..\d2v_lda.pkl', 'wb') as file:
-#         pickle.dump((ind_embs, lda_dic, lda_model, lda_tfidf, ques_d2v, tag_embs), file)
+#         pickle.dump((tag_embs, ind_embs, head_d2v, ques_d2v, lda_dic, lda_tfidf, lda_model), file)
 
 with open(r'..\..\d2v_lda.pkl', 'rb') as file:
-    ind_embs, lda_dic, lda_model, lda_tfidf, ques_d2v, tag_embs = pickle.load(file)
+    tag_embs, ind_embs, head_d2v, ques_d2v, lda_dic, lda_tfidf, lda_model = pickle.load(file)
 
 # extract and preprocess feature for all three main entities
 
@@ -76,7 +76,7 @@ que_data = que_proc.transform(que_train, tag_que)
 stu_proc = StuProc()
 stu_data = stu_proc.transform(stu_train, que_train, ans_train)
 
-pro_proc = ProProc(tag_embs, ind_embs)
+pro_proc = ProProc(tag_embs, ind_embs, head_d2v, ques_d2v)
 pro_data = pro_proc.transform(pro_train, que_train, ans_train, tag_pro)
 
 # ######################################################################################################################
@@ -115,7 +115,7 @@ model = DistanceModel(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) 
                       pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
                       inter_dim=20, output_dim=10)
 
-for lr, epochs in zip([0.01, 0.001, 0.0001], [5, 10, 5]):
+for lr, epochs in zip([0.01, 0.001, 0.0001, 0.00001], [5, 10, 10, 5]):
     model.compile(Adam(lr=lr), loss='binary_crossentropy', metrics=['accuracy'])
     model.fit_generator(bg, epochs=epochs, verbose=2)
 
@@ -157,7 +157,7 @@ que_data = que_proc.transform(questions, tag_que)
 stu_proc = StuProc()
 stu_data = stu_proc.transform(students, questions, answers)
 
-pro_proc = ProProc(tag_embs, ind_embs)
+pro_proc = ProProc(tag_embs, ind_embs, head_d2v, ques_d2v)
 pro_data = pro_proc.transform(professionals, questions, answers, tag_pro)
 
 # initialize batch generator

@@ -32,9 +32,7 @@ def train_d2v(df: pd.DataFrame, target: str, features: list, dim: int) -> (Doc2V
     return d2v, docvecs
 
 
-# TODO: update to consider professional's tags
-
-def pipeline_d2v(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: pd.DataFrame,
+def pipeline_d2v(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tag_que: pd.DataFrame, tag_pro: pd.DataFrame,
                  dim: int) -> (dict, dict, Doc2Vec):
     """
     Pipeline for training embeddings for
@@ -44,18 +42,23 @@ def pipeline_d2v(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: 
     :param que: raw questions.csv dataset
     :param ans: raw answers.csv dataset
     :param pro: raw professionals.csv dataset
-    :param tags: tags.csv merged with tag_questions.csv
+    :param tag_que: tags.csv merged with tag_questions.csv
+    :param tag_pro: tags.csv merged with tag_users.csv
     :param dim: dimension of doc2vec embeddings to train
     :return: trained tags, industries embeddings and question's Doc2Vec model
     """
+    # aggregate all the tags in one string for same professionals
+    pro_tags = tag_pro[['tag_users_user_id', 'tags_tag_name']].groupby(by='tag_users_user_id', as_index=False) \
+        .aggregate(lambda x: ' '.join(x)).rename(columns={'tags_tag_name': 'tags_pro_name'})
+    pro_tags = pro.merge(pro_tags, left_on='professionals_id', right_on='tag_users_user_id')
 
     # merge questions, tags, answers and professionals
-    que_tags = que.merge(tags, left_on='questions_id', right_on='tag_questions_question_id')
+    que_tags = que.merge(tag_que, left_on='questions_id', right_on='tag_questions_question_id')
     ans_que_tags = ans.merge(que_tags, left_on="answers_question_id", right_on="questions_id")
-    df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
+    df = ans_que_tags.merge(pro_tags, left_on='answers_author_id', right_on='professionals_id')
 
-    text_features = ['questions_title', 'questions_body', 'answers_body',
-                     'tags_tag_name', 'professionals_industry', 'professionals_headline']
+    text_features = ['questions_title', 'questions_body', 'answers_body', 'tags_tag_name', 'tags_pro_name',
+                     'professionals_industry', 'professionals_headline']
 
     # train and save question's tags embeddings
     _, tags_embs = train_d2v(df, 'tags_tag_name', text_features, dim)
@@ -67,14 +70,16 @@ def pipeline_d2v(que: pd.DataFrame, ans: pd.DataFrame, pro: pd.DataFrame, tags: 
     # merge questions, aggregated tags, answers and professionals
     que_tags = que.merge(que_tags, on='questions_id')
     ans_que_tags = ans.merge(que_tags, left_on="answers_question_id", right_on="questions_id")
-    df = ans_que_tags.merge(pro, left_on='answers_author_id', right_on='professionals_id')
+    df = ans_que_tags.merge(pro_tags, left_on='answers_author_id', right_on='professionals_id')
 
     # train and save professional's industries embeddings
     _, inds_embs = train_d2v(df, 'professionals_industry', text_features, dim)
 
-    ques_d2v, _ = train_d2v(que_tags, 'questions_id', ['questions_whole'], 10)
+    head_d2v, _ = train_d2v(df, 'professionals_headline', text_features, 5)
 
-    return tags_embs, inds_embs, ques_d2v
+    ques_d2v, _ = train_d2v(que_tags, 'questions_id', ['questions_whole'], dim)
+
+    return tags_embs, inds_embs, head_d2v, ques_d2v
 
 
 def pipeline_lda(que: pd.DataFrame, dim: int) -> (Dictionary, TfidfModel, LdaMulticore):
