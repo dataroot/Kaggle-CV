@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import keras
+import os
 
 from sklearn.neighbors import KDTree
 
@@ -123,7 +124,7 @@ class Predictor:
         return lat_vecs
 
     def __construct_df(self, ids, sims, scores):
-        scores = np.around(scores, 4)
+        scores = np.round(scores, 4)
         tuples = []
         for i, cur_id in enumerate(ids):
             for j, sim in enumerate(sims[i]):
@@ -211,12 +212,12 @@ class Formatter:
     """
 
     def __init__(self, data_path: str):
-        pro = pd.read_csv(data_path + 'professionals.csv')
-        que = pd.read_csv(data_path + 'questions.csv')
+        pro = pd.read_csv(os.path.join(data_path, 'professionals.csv'))
+        que = pd.read_csv(os.path.join(data_path, 'questions.csv'))
 
-        tags = pd.read_csv(data_path + 'tags.csv')
-        tag_users = pd.read_csv(data_path + 'tag_users.csv')
-        tag_que = pd.read_csv(data_path + 'tag_questions.csv')
+        tags = pd.read_csv(os.path.join(data_path, 'tags.csv'))
+        tag_users = pd.read_csv(os.path.join(data_path, 'tag_users.csv'))
+        tag_que = pd.read_csv(os.path.join(data_path, 'tag_questions.csv'))
 
         tag_merged = tags.merge(tag_users, left_on='tags_tag_id', right_on='tag_users_tag_id')
         tags_grouped = tag_merged.groupby('tag_users_user_id').agg(lambda x: ' '.join(x))[['tags_tag_name']]
