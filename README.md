@@ -90,12 +90,12 @@ Folder structure
 │    └── activity.py  	   - here are all activity filters described in details in our kernel notebook
 │    └── demo.py  	       - python file which shows how Predictor works, run with `python demo.py`
 │    └── predictor.py  	   - contains two classes Predictor for content based recommendations, and Formatter for nice outputs
-│    └── eg_que_to_pro.py  - epsilon-greedy questions to proffesional recommender
+│    └── eg_que_to_pro.py  - epsilon-greedy questions to professional recommender
 │ 
 │ 
 ├── train                  - directory containing Batch generator and training script
 │    └── generator.py      - BatchGenerator for generating training data for models
-│    └── main.py           - train scipt, run with `python main.py`
+│    └── main.py           - train script, run with `python main.py`
 │ 
 │ 
 ├── utils                  - useful utils
@@ -139,6 +139,6 @@ So, if you wish to add a new feature, there are two possible options:
 - Train VAE
 - Engineer reward function in order to solve:
 	- No question left behind
-	- Don’t churn the professionals (too much email → feels like spam → people leave) (partially solved with our currenlt approach, but there are still custom parameters which can be learned and adjusted automatically)
+	- Don’t churn the professionals (too much email → feels like spam → people leave) (partially solved with our current approach, but there are still custom parameters which can be learned and adjusted automatically)
 	- Speed to first answer
 - Train the agent
