@@ -53,6 +53,8 @@ pro_tags_sample = pd.read_csv(os.path.join(DATA_PATH, 'tag_users_sample.csv')).d
 answers = pd.read_csv(os.path.join(DATA_PATH, 'answers.csv'))
 questions = pd.read_csv(os.path.join(DATA_PATH, 'questions.csv'))
 
+professionals_sample = pd.to_datetime(professionals_sample['professionals_date_joined'], infer_datetime_format=True)
+
 answers['answers_date_added'] = pd.to_datetime(answers['answers_date_added'], infer_datetime_format=True)
 answers['answers_body'] = answers['answers_body'].apply(tp.process)
 
@@ -123,7 +125,6 @@ def professional():
     data = request.get_json()
 
     pro = professionals_sample[professionals_sample['professionals_id'] == data['professionals_id']]
-    pro['professionals_date_joined'] = pd.to_datetime(pro['professionals_date_joined'])
     pro = pro.to_dict('records')[0]
 
     tag = pro_tags_sample[pro_tags_sample['tag_users_user_id'] == data['professionals_id']]
