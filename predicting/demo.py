@@ -1,4 +1,6 @@
+import os
 import pickle
+
 import pandas as pd
 
 from models.distance import DistanceModel
@@ -6,6 +8,8 @@ from predicting.predictor import Predictor, Formatter
 from utils.utils import TextProcessor
 
 pd.set_option('display.max_columns', 100, 'display.width', 1024)
+
+DATA_PATH, DUMP_PATH = '../../data/', '../dump/'
 
 if __name__ == '__main__':
     tp = TextProcessor()
@@ -15,9 +19,9 @@ if __name__ == '__main__':
                           pro_dim=42 - 2,
                           pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
                           inter_dim=20, output_dim=10)
-    model.load_weights('../training/model.h5')
+    model.load_weights(os.path.join(DUMP_PATH, 'model.h5'))
 
-    with open('../training/dump.pkl', 'rb') as file:
+    with open(os.path.join(DUMP_PATH, 'dump.pkl'), 'rb') as file:
         d = pickle.load(file)
         que_data = d['que_data']
         stu_data = d['stu_data']
@@ -28,7 +32,7 @@ if __name__ == '__main__':
         pos_pairs = d['pos_pairs']
     pred = Predictor(model, que_data, stu_data, pro_data, que_proc, pro_proc, que_to_stu, pos_pairs)
 
-    formatter = Formatter('../../data/')
+    formatter = Formatter(DATA_PATH)
 
     # From ques
 
@@ -52,8 +56,8 @@ if __name__ == '__main__':
 
     # From pros
 
-    ans_df = pd.read_csv('../../data/answers.csv')
-    que_df = pd.read_csv('../../data/questions.csv')
+    ans_df = pd.read_csv(os.path.join(DATA_PATH, 'answers.csv'))
+    que_df = pd.read_csv(os.path.join(DATA_PATH, 'questions.csv'))
     que_df['questions_title'] = que_df['questions_title'].apply(tp.process)
     que_df['questions_body'] = que_df['questions_body'].apply(tp.process)
     ans_df['answers_body'] = ans_df['answers_body'].apply(tp.process)

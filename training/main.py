@@ -16,16 +16,16 @@ from utils.utils import TextProcessor
 pd.set_option('display.max_columns', 100, 'display.width', 1024)
 pd.options.mode.chained_assignment = None
 
-if __name__ == '__main__':
-    DATA_PATH, SPLIT_DATE, TO_DUMP = '../../data/', '2019-01-01', True
+DATA_PATH, SPLIT_DATE, DUMP_PATH = '../../data/', '2019-01-01', '../dump/'
 
+if __name__ == '__main__':
     tp = TextProcessor()
 
-    # ######################################################################################################################
+    # ##################################################################################################################
     #
     #                                                       READ
     #
-    # ######################################################################################################################
+    # ##################################################################################################################
 
     answers = pd.read_csv(os.path.join(DATA_PATH, 'answers.csv'), parse_dates=['answers_date_added'])
     answers['answers_body'] = answers['answers_body'].apply(tp.process)
@@ -53,23 +53,17 @@ if __name__ == '__main__':
     tag_pro = pd.read_csv(os.path.join(DATA_PATH, 'tag_users.csv')) \
         .merge(tags, left_on='tag_users_tag_id', right_on='tags_tag_id')
 
-    # ######################################################################################################################
+    # ##################################################################################################################
     #
     #                                                       TRAIN
     #
-    # ######################################################################################################################
+    # ##################################################################################################################
 
     print('TRAIN')
 
     # calculate and save tag and industry embeddings on train data
     tag_embs, ind_embs, head_d2v, ques_d2v = pipeline_d2v(que_train, ans_train, pro_train, tag_que, tag_pro, 10)
     lda_dic, lda_tfidf, lda_model = pipeline_lda(que_train, 10)
-
-    # with open(r'..\..\d2v_lda.pkl', 'wb') as file:
-    #     pickle.dump((tag_embs, ind_embs, head_d2v, ques_d2v, lda_dic, lda_tfidf, lda_model), file)
-
-    # with open(r'..\..\d2v_lda.pkl', 'rb') as file:
-    #     tag_embs, ind_embs, head_d2v, ques_d2v, lda_dic, lda_tfidf, lda_model = pickle.load(file)
 
     # extract and preprocess feature for all three main entities
 
@@ -82,11 +76,11 @@ if __name__ == '__main__':
     pro_proc = ProProc(tag_embs, ind_embs, head_d2v, ques_d2v)
     pro_data = pro_proc.transform(pro_train, que_train, ans_train, tag_pro)
 
-    # ######################################################################################################################
+    # ##################################################################################################################
     #
     #                                                       INGESTION
     #
-    # ######################################################################################################################
+    # ##################################################################################################################
 
     print('INGESTION')
 
@@ -105,11 +99,11 @@ if __name__ == '__main__':
 
     bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, pos_pairs, pro_to_date)
 
-    # ######################################################################################################################
+    # ##################################################################################################################
     #
     #                                                       MODEL
     #
-    # ######################################################################################################################
+    # ##################################################################################################################
 
     # in train mode, build, compile train and save model
     model = DistanceModel(que_dim=len(que_data.columns) - 2 + len(stu_data.columns) - 2,
@@ -122,11 +116,11 @@ if __name__ == '__main__':
         model.compile(Adam(lr=lr), loss='binary_crossentropy', metrics=['accuracy'])
         model.fit_generator(bg, epochs=epochs, verbose=2)
 
-    # ######################################################################################################################
+    # ##################################################################################################################
     #
     #                                                   EVALUATION
     #
-    # ######################################################################################################################
+    # ##################################################################################################################
 
     # dummy batch generator used to extract single big batch of data to calculate feature importance
     bg = BatchGenerator(que_data, stu_data, pro_data, 1024, pos_pairs, pos_pairs, pro_to_date)
@@ -139,11 +133,11 @@ if __name__ == '__main__':
     fi = permutation_importance(model, bg[0][0][0], bg[0][0][1], bg[0][1], fn, n_trials=3)
     plot_fi(fi)
 
-    # ######################################################################################################################
+    # ##################################################################################################################
     #
     #                                                       TEST
     #
-    # ######################################################################################################################
+    # ##################################################################################################################
 
     # non-negative pairs are all known positive pairs to the moment
     nonneg_pairs = pos_pairs
@@ -166,11 +160,11 @@ if __name__ == '__main__':
     # initialize batch generator
     bg = BatchGenerator(que_data, stu_data, pro_data, 64, pos_pairs, nonneg_pairs, pro_to_date)
 
-    # ######################################################################################################################
+    # ##################################################################################################################
     #
     #                                                   EVALUATION
     #
-    # ######################################################################################################################
+    # ##################################################################################################################
 
     loss, acc = model.evaluate_generator(bg)
     print(f'Loss: {loss}, accuracy: {acc}')
@@ -189,14 +183,19 @@ if __name__ == '__main__':
     # mappings from question's id to its author id. Used in Predictor
     que_to_stu = {row['questions_id']: row['questions_author_id'] for i, row in questions.iterrows()}
 
-    if TO_DUMP:
-        d = {'que_data': que_data,
-             'stu_data': stu_data,
-             'pro_data': pro_data,
-             'que_proc': que_proc,
-             'pro_proc': pro_proc,
-             'que_to_stu': que_to_stu,
-             'pos_pairs': pos_pairs}
-        with open('dump.pkl', 'wb') as file:
-            pickle.dump(d, file)
-        model.save_weights('model.h5')
+    # ##################################################################################################################
+    #
+    #                                                       SAVE
+    #
+    # ##################################################################################################################
+
+    d = {'que_data': que_data,
+         'stu_data': stu_data,
+         'pro_data': pro_data,
+         'que_proc': que_proc,
+         'pro_proc': pro_proc,
+         'que_to_stu': que_to_stu,
+         'pos_pairs': pos_pairs}
+    with open(os.path.join(DUMP_PATH, 'dump.pkl'), 'wb') as file:
+        pickle.dump(d, file)
+    model.save_weights(os.path.join(DUMP_PATH, 'model.h5'))
