@@ -1,31 +1,31 @@
-,professionals_id,professionals_location,professionals_industry,professionals_headline,professionals_date_joined
-3115,6c7b20179cde493a8e6be5c93f8b3535,"Dallas, Texas",anim,visual effect anim,2015-12-21 17:36:29 UTC+0000
-1604,76ebb07543af458f8c3a9a502286f4ef,"North Carolina, North Carolina",real estat,region vice presid prg real estat manag,2014-11-08 19:54:44 UTC+0000
-13581,1cf674f780184abbbafba79a7d38ca36,"Ithaca, New York Area",higher educ,graduat research assist binghamton univers,2017-10-10 19:30:25 UTC+0000
-12059,012de91c57f741d49f9feb67bb242b7d,Greater Pittsburgh Area,write edit,creativ writer copi content poetri word style,2017-06-28 15:41:50 UTC+0000
-20195,5decbeed59da48479805466a45c0c41e,Greater New York City Area,biotechnolog,graduat stoni brook univers degre biomed engin appli mathemat,2018-06-21 19:33:49 UTC+0000
-10076,180a00a269c7476095938fa1d59f9b34,Greece,educ manag,teacher,2017-04-12 12:32:56 UTC+0000
-16074,9eab96bba1ad4c9fa241e0ab2916e4f6,"Kitchener, Canada Area",account,senior associ assur pwc,2018-02-16 13:39:29 UTC+0000
-18206,db993ff4b1204dd08349944e2ca2ad2a,"Tampa/St. Petersburg, Florida Area",oil energi,technic superintend pacif drill servic inc,2018-04-10 14:04:22 UTC+0000
-11772,26d8ea280c7b451798968fb6b5ebb83a,"Santa Cruz, California",research,wildlif ecologist,2017-06-08 18:53:41 UTC+0000
-6470,bf61b9f8b7b3476880011855411f529d,"Los Angeles, California",broadcast media,produc upright citizen brigad theatr,2016-05-16 18:40:13 UTC+0000
-9977,b0d3d3269786402c9904338d5494492a,"California, California",comput softwar,activ seek full time opportun softwar develop java spring agil scrum tdd backend analyst,2017-04-09 23:15:03 UTC+0000
-4216,d922b841ceb545d7b5ce7bb066ef96ec,"Coppell, Texas",comput tabletop game,game design educ want know game,2016-02-29 15:58:27 UTC+0000
-2758,8cb2676d389f4317a20709eb8426c2c2,"Oakland, California",secur investig,feder protect secur,2015-11-26 06:39:26 UTC+0000
-3893,04edc40ea7c240a8bfaaa19394e1f47a,"Langhorne, Pennsylvania",mental health care,qualiti assur coordin new jersey dept correct,2016-02-15 15:43:28 UTC+0000
-2270,cebebfc280f14eb69a9cb8eb939822f7,"Chennai, Tamil Nadu, India",mechan industri engin,mechan engin,2015-08-18 13:05:44 UTC+0000
-1895,350a7fe2bdf34216b1496ac13a00649e,"Jacksonville, Florida",comput game,senior softwar engin zynga sport,2015-04-23 15:12:47 UTC+0000
-5328,873a4b08d4434f088a4d1f4b9654af4d,"Humble, Texas",inform technolog servic,support extraordinair,2016-04-13 20:44:34 UTC+0000
-3202,4fc7f10cc9094109a24f83d7c2ad932f,Egypt,chemic,chemic engin,2015-12-28 22:57:45 UTC+0000
-771,f783d3387a60435ea6f2444fb62325dc,"Lancaster, England, United Kingdom",environment servic,research lancast univers,2014-02-08 14:50:02 UTC+0000
-4681,34e6995ff9cc41ac853af7da4c15cfce,"San Antonio, Texas",airlin aviat,proprietor julich aviat,2016-03-16 00:45:20 UTC+0000
-1599,93cc0b14523b4f69bd3b2e44bef36d30,"San Jose, California",bank,manag product commun train silicon valley bank,2014-11-05 20:58:10 UTC+0000
-13621,176d5aeeef1546cd962fb2375eeec7c5,"Phoenix, Arizona Area",financi servic,trust offic finemark bank,2017-10-11 22:15:32 UTC+0000
-5313,e2881beb96334dcba8fa3c7feeafe928,"New York, New York",mechan industri engin,co owner sb royal,2016-04-13 02:27:54 UTC+0000
-5033,5ca6a4d5d6d047e0a264a7c540e7fee2,"Chicago, Illinois",music,audio engin music produc,2016-03-29 17:24:05 UTC+0000
-8077,8e4c7a994e4e41a8869c58c7d22a6ae6,,telecommun,nan,2016-10-06 21:51:45 UTC+0000
-11165,6d5c91cdb89c4bb3987d9524b1369179,"Herndon, Virginia",public relat,senior commun specialist,2017-05-08 12:50:43 UTC+0000
-6432,1db1485cc8c74b0291505e92237b98d0,"New York, New York",hospit health care,physic therapist,2016-05-16 15:39:07 UTC+0000
-25996,c946d53a8efe48dca1f6cc2360bbfa36,San Francisco Bay Area,intern trade develop,intern busi profession busi oper analyst suppli chain corpor strategi,2018-12-04 07:58:00 UTC+0000
-16853,1ad13abd75b641198468b121e83e8706,San Francisco Bay Area,design,graphic design base san francisco,2018-03-08 20:53:37 UTC+0000
-13769,5c2242b9b4bf4e48982823f454fbd00d,"Westbury, New York",medic practic,orthodont smile dentistri pllc,2017-10-19 19:24:25 UTC+0000
+professionals_id,professionals_location,professionals_industry,professionals_headline,professionals_date_joined,answers_count
+c946d53a8efe48dca1f6cc2360bbfa36,San Francisco Bay Area,International Trade and Development,International Business Professional | Business Operations Analyst | Supply Chain| Corporate Strategy,2018-12-04 07:58:00 UTC+0000,0
+26d8ea280c7b451798968fb6b5ebb83a,"Santa Cruz, California",Research,Wildlife Ecologist,2017-06-08 18:53:41 UTC+0000,8
+bf61b9f8b7b3476880011855411f529d,"Los Angeles, California",Broadcast Media,Producer at The Upright Citizens Brigade Theatre,2016-05-16 18:40:13 UTC+0000,0
+6d5c91cdb89c4bb3987d9524b1369179,"Herndon, Virginia",Public Relations,Senior Communications Specialist,2017-05-08 12:50:43 UTC+0000,2
+180a00a269c7476095938fa1d59f9b34,Greece,Education Management,teacher ,2017-04-12 12:32:56 UTC+0000,0
+8e4c7a994e4e41a8869c58c7d22a6ae6,,Telecommunications,,2016-10-06 21:51:45 UTC+0000,4
+5ca6a4d5d6d047e0a264a7c540e7fee2,"Chicago, Illinois",Music,Audio Engineer | Music Producer,2016-03-29 17:24:05 UTC+0000,0
+e2881beb96334dcba8fa3c7feeafe928,"New York, New York",Mechanical or Industrial Engineering,Co Owner at SB Royal,2016-04-13 02:27:54 UTC+0000,0
+6c7b20179cde493a8e6be5c93f8b3535,"Dallas, Texas",Animation,Visual Effects & Animation,2015-12-21 17:36:29 UTC+0000,3
+012de91c57f741d49f9feb67bb242b7d,Greater Pittsburgh Area,Writing and Editing,"Creative Writer~Copy, Content, Poetry, Word Styling",2017-06-28 15:41:50 UTC+0000,1
+d922b841ceb545d7b5ce7bb066ef96ec,"Coppell, Texas",Computer and Tabletop Games,Game Designer and Educator:  Want to know about games?,2016-02-29 15:58:27 UTC+0000,16
+b0d3d3269786402c9904338d5494492a,"California, California",Computer Software,"Actively Seeking Full Time Opportunities in Software Development | Java, Spring, Agile, Scrum, TDD, Backend, Analyst",2017-04-09 23:15:03 UTC+0000,0
+5c2242b9b4bf4e48982823f454fbd00d,"Westbury, New York",Medical Practice,"Orthodontics at All About Smiles Dentistry,PLLC",2017-10-19 19:24:25 UTC+0000,0
+04edc40ea7c240a8bfaaa19394e1f47a,"Langhorne, Pennsylvania",Mental Health Care,Quality Assurance Coordinator at New Jersey Dept. of Corrections,2016-02-15 15:43:28 UTC+0000,1
+34e6995ff9cc41ac853af7da4c15cfce,"San Antonio, Texas",Airlines/Aviation,Proprietor at Julicher Aviation,2016-03-16 00:45:20 UTC+0000,14
+76ebb07543af458f8c3a9a502286f4ef,"North Carolina, North Carolina",Real Estate,Regional Vice President - PRG Real Estate Management,2014-11-08 19:54:44 UTC+0000,0
+93cc0b14523b4f69bd3b2e44bef36d30,"San Jose, California",Banking,"Manager, Product Communications & Training at Silicon Valley Bank",2014-11-05 20:58:10 UTC+0000,1
+1cf674f780184abbbafba79a7d38ca36,"Ithaca, New York Area",Higher Education,Graduate Research Assistant at Binghamton University,2017-10-10 19:30:25 UTC+0000,0
+9eab96bba1ad4c9fa241e0ab2916e4f6,"Kitchener, Canada Area",Accounting,"Senior Associate, Assurance at PwC",2018-02-16 13:39:29 UTC+0000,0
+8cb2676d389f4317a20709eb8426c2c2,"Oakland, California",Security and Investigations,Federal Protective Security,2015-11-26 06:39:26 UTC+0000,1
+1db1485cc8c74b0291505e92237b98d0,"New York, New York",Hospital and Health Care,Physical Therapist,2016-05-16 15:39:07 UTC+0000,1
+873a4b08d4434f088a4d1f4b9654af4d,"Humble, Texas",Information Technology and Services,IT Support Extraordinaire,2016-04-13 20:44:34 UTC+0000,0
+cebebfc280f14eb69a9cb8eb939822f7,"Chennai, Tamil Nadu, India",Mechanical or Industrial Engineering,mechanical engineer,2015-08-18 13:05:44 UTC+0000,0
+176d5aeeef1546cd962fb2375eeec7c5,"Phoenix, Arizona Area",Financial Services,Trust Officer at FineMark Bank,2017-10-11 22:15:32 UTC+0000,0
+db993ff4b1204dd08349944e2ca2ad2a,"Tampa/St. Petersburg, Florida Area",Oil and Energy,"Technical Superintendent at Pacific Drilling Services, Inc.",2018-04-10 14:04:22 UTC+0000,1
+4fc7f10cc9094109a24f83d7c2ad932f,Egypt,Chemicals,chemical engineer,2015-12-28 22:57:45 UTC+0000,0
+f783d3387a60435ea6f2444fb62325dc,"Lancaster, England, United Kingdom",Environmental Services,Researcher at Lancaster University,2014-02-08 14:50:02 UTC+0000,1
+1ad13abd75b641198468b121e83e8706,San Francisco Bay Area,Design,Graphic Designer based in San Francisco,2018-03-08 20:53:37 UTC+0000,4
+350a7fe2bdf34216b1496ac13a00649e,"Jacksonville, Florida",Computer Games,Senior Software Engineer at Zynga Sports 365,2015-04-23 15:12:47 UTC+0000,1
+5decbeed59da48479805466a45c0c41e,Greater New York City Area,Biotechnology,Graduate from Stony Brook University with a degree in Biomedical Engineering and Applied Mathematics.,2018-06-21 19:33:49 UTC+0000,0

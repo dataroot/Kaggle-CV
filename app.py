@@ -18,6 +18,7 @@ from recommender.predictor import Predictor, Formatter
 from preprocessors.queproc import QueProc
 from preprocessors.proproc import ProProc
 
+pd.set_option('display.max_columns', 100, 'display.width', 1024)
 
 # Set oath to data
 DATA_PATH = 'data'
@@ -48,8 +49,8 @@ with open(os.path.join(DUMP_PATH, 'dump.pkl'), 'rb') as file:
 tp = TextProcessor()
 
 # prepare the data
-professionals_sample = pd.read_csv(os.path.join(SAMPLE_PATH, 'pro_sample.csv')).drop(columns='Unnamed: 0')
-pro_tags_sample = pd.read_csv(os.path.join(SAMPLE_PATH, 'tag_users_sample.csv')).drop(columns='Unnamed: 0')
+professionals_sample = pd.read_csv(os.path.join(SAMPLE_PATH, 'pro_sample.csv'))
+pro_tags_sample = pd.read_csv(os.path.join(SAMPLE_PATH, 'tag_users_sample.csv'))
 
 answers = pd.read_csv(os.path.join(DATA_PATH, 'answers.csv'))
 questions = pd.read_csv(os.path.join(DATA_PATH, 'questions.csv'))
@@ -65,7 +66,7 @@ questions['questions_body'] = questions['questions_body'].apply(tp.process)
 questions['questions_whole'] = questions['questions_title'] + ' ' + questions['questions_body']
 
 pred = Predictor(model, que_data, stu_data, pro_data, que_proc, pro_proc, que_to_stu, pos_pairs)
-formatter = Formatter('data')
+formatter = Formatter(DATA_PATH)
 
 # init flask server
 app = Flask(__name__, static_url_path='', template_folder='views')
