@@ -53,7 +53,7 @@ def send_quesionts_to_professional(pro_sample_dict, pro_answer_dates, questions,
         if passed_questions.size > 0:
             for sq in spam_questions:
                 if np.random.rand() < eps_1:
-                    explore_questions.append(qs)
+                    explore_questions.append(sq)
     else:
         if passed_questions.size > 0:
             e_cond = eps_2
@@ -62,7 +62,7 @@ def send_quesionts_to_professional(pro_sample_dict, pro_answer_dates, questions,
     
         for sq in spam_questions:
             if np.random.rand() < e_cond:
-                explore_questions.append(qs)
+                explore_questions.append(sq)
             
     final_q_ids = np.append(passed_questions, explore_questions)       
     final_df = content_result[content_result['questions_id'].isin(final_q_ids)]

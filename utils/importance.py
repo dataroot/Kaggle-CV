@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 
 # Use for matplotlib PC for MAC OS
-import matplotlib
-matplotlib.use('TkAgg') 
+# import matplotlib
+# matplotlib.use('TkAgg') 
 
 from matplotlib import pyplot as plt
 
