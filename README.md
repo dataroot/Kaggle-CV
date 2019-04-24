@@ -99,7 +99,7 @@ Folder structure
 │ 
 │ 
 ├── utils                  - useful utils
-│    └── importance.py     - 
+│    └── importance.py     
 │    └── utils.py
 │ 
 │ 
