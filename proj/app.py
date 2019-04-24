@@ -34,6 +34,9 @@ model = DistanceModel(que_dim= 34 - 2 + 8 - 2,
                                   pro_dim=42 - 2,
                                   pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
                                   inter_dim=20, output_dim=10)
+
+model.load_weights('model.h5')
+
 with open('dump.pkl', 'rb') as file:
     d = pickle.load(file)
     que_data = d['que_data']
@@ -107,55 +110,44 @@ def question():
 
 @app.route("/api/professional", methods = ['POST'])
 def professional():
-  # try:
-  pro_dict = {
-      'professionals_id': [],
-      'professionals_location': [],
-      'professionals_industry': [],
-      'professionals_headline': [],
-      'professionals_date_joined': [],
-      'professionals_subscribed_tags': []
-    }
+  try:
+    pro_dict = {
+        'professionals_id': [],
+        'professionals_location': [],
+        'professionals_industry': [],
+        'professionals_headline': [],
+        'professionals_date_joined': [],
+        'professionals_subscribed_tags': []
+      }
 
-  data = request.get_json()
+    data = request.get_json()
 
-  print(1)
+    pro = professionals_sample[professionals_sample['professionals_id'] == data['professionals_id']]
+    pro['professionals_date_joined'] = pd.to_datetime(pro['professionals_date_joined'])
+    pro = pro.to_dict('records')[0]
 
-  pro = professionals_sample[professionals_sample['professionals_id'] == data['professionals_id']]
-  pro['professionals_date_joined'] = pd.to_datetime(pro['professionals_date_joined'])
-  pro = pro.to_dict('records')[0]
+    tag = pro_tags_sample[pro_tags_sample['tag_users_user_id'] == data['professionals_id']]
 
-
-
-  print(2)
-  tag = pro_tags_sample[pro_tags_sample['tag_users_user_id'] == data['professionals_id']]
-  print(3)
-  for key, val in pro.items():
-      if key in pro_dict and val:
-        pro_dict[key].append(str(val))
-  print(4)
-  pro_dict['professionals_subscribed_tags'].append(' '.join(list(tag['tags_tag_name'])))    
-  print(5)
-  for key, val in pro_dict.items():
-    if not val:
-       return json.dumps([], default=str)
-  print(5)
-
-  pro_df, pro_tags = Formatter.convert_pro_dict(pro_dict)
-  print(6)
-  tmp = pred.find_ques_by_pro(pro_df, questions, answers, pro_tags)
-  print(7)
-  final_df = formatter.get_que(tmp).fillna('')
-  print(8)
-  final_data = final_df.to_dict('records')
-  print(9)
-  print("RETURN")
-  print(len(final_data))
-  print(final_data)
-  return json.dumps(final_data, allow_nan=False) 
+    for key, val in pro.items():
+        if key in pro_dict and val:
+          pro_dict[key].append(str(val))
     
-  # except Exception as e:
-  #   return json.dumps([], default=str)
+    pro_dict['professionals_subscribed_tags'].append(' '.join(list(tag['tags_tag_name'])))    
+    
+    for key, val in pro_dict.items():
+      if not val:
+         return json.dumps([], default=str)
+    
+    pro_df, pro_tags = Formatter.convert_pro_dict(pro_dict)
+    tmp = pred.find_ques_by_pro(pro_df, questions, answers, pro_tags)
+    final_df = formatter.get_que(tmp).fillna('')
+    
+    final_data = final_df.to_dict('records')
+    
+    return json.dumps(final_data, allow_nan=False) 
+    
+  except Exception as e:
+    return json.dumps([], default=str)
 
 if __name__ == '__main__':
   app.run(debug=False, host='0.0.0.0', port = 8000)
