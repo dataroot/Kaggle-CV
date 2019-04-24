@@ -2,42 +2,39 @@ from flask_cors import CORS
 from flask import request
 from flask import Flask, Response
 from flask import render_template
-from processors import QueProc, ProProc
 
-import traceback
-import numpy as np
-import pandas as pd
-
-import traceback
 import json
 import sys
 import os
 
-import pickle
+import pandas as pd
 
+import pickle
 from datetime import datetime
 
-from utils import TextProcessor
+from utils.utils import TextProcessor
+from models.distance import DistanceModel
+from recommender.predictor import Predictor, Formatter
+from preprocessors.queproc import QueProc
+from preprocessors.proproc import ProProc
 
-from models import DistanceModel
-from predictor import Predictor, Formatter
 
-pd.set_option('display.width', 1024, 'display.max_columns', 100)
-
-
+# Set oath to data
 DATA_PATH = 'data'
+SAMPLE_PATH = 'demo_data'
+DUMP_PATH = 'dump'
 
-tp = TextProcessor()
-
+# init model
 model = DistanceModel(que_dim= 34 - 2 + 8 - 2,
                                   que_input_embs=[102, 42], que_output_embs=[2, 2],
                                   pro_dim=42 - 2,
                                   pro_input_embs=[102, 102, 42], pro_output_embs=[2, 2, 2],
                                   inter_dim=20, output_dim=10)
+# load weights
+model.load_weights(os.path.join(DUMP_PATH, 'model.h5'))
 
-model.load_weights('model.h5')
-
-with open('dump.pkl', 'rb') as file:
+# load dumped data
+with open(os.path.join(DUMP_PATH, 'dump.pkl'), 'rb') as file:
     d = pickle.load(file)
     que_data = d['que_data']
     stu_data = d['stu_data']
@@ -47,8 +44,12 @@ with open('dump.pkl', 'rb') as file:
     que_to_stu = d['que_to_stu']
     pos_pairs = d['pos_pairs']
 
-professionals_sample = pd.read_csv(os.path.join(DATA_PATH, 'pro_sample.csv')).drop(columns='Unnamed: 0')
-pro_tags_sample = pd.read_csv(os.path.join(DATA_PATH, 'tag_users_sample.csv')).drop(columns='Unnamed: 0')
+# init text processor
+tp = TextProcessor()
+
+# prepare the data
+professionals_sample = pd.read_csv(os.path.join(SAMPLE_PATH, 'pro_sample.csv')).drop(columns='Unnamed: 0')
+pro_tags_sample = pd.read_csv(os.path.join(SAMPLE_PATH, 'tag_users_sample.csv')).drop(columns='Unnamed: 0')
 
 answers = pd.read_csv(os.path.join(DATA_PATH, 'answers.csv'))
 questions = pd.read_csv(os.path.join(DATA_PATH, 'questions.csv'))
@@ -66,10 +67,11 @@ questions['questions_whole'] = questions['questions_title'] + ' ' + questions['q
 pred = Predictor(model, que_data, stu_data, pro_data, que_proc, pro_proc, que_to_stu, pos_pairs)
 formatter = Formatter('data')
 
-
+# init flask server
 app = Flask(__name__, static_url_path='', template_folder='views')
 CORS(app) 
 
+# Routes
 @app.route('/')
 def index():
   return render_template('index.html')

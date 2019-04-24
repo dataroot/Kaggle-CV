@@ -2,13 +2,15 @@ import copy
 
 import numpy as np
 import pandas as pd
+
+# Use for matplotlib PC for MAC OS
+import matplotlib
+matplotlib.use('TkAgg') 
+
 from matplotlib import pyplot as plt
-from jupyterthemes import jtplot
 
 from sklearn.utils import shuffle
 import keras
-
-jtplot.style('gruvboxd')
 
 
 def permutation_importance(model: keras.models.Model, x_que: np.ndarray, x_pro: np.ndarray, y: np.ndarray,
